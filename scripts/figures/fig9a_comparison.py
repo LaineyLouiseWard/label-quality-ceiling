@@ -2,25 +2,34 @@
 """
 scripts/figures/fig9a_comparison.py
 
-Fig 9a: Qualitative ablation comparison on FOUR tiles, shown as 4 columns.
+Qualitative ablation comparison on FOUR tiles, shown as 4 columns.
 
-Layout (8 rows x 4 columns):
-  Rows:    Image, GT, Stage 1, Stage 2, Stage 3, Stage 4, Stage 5, Stage 6
+Layout (7 rows x 4 columns):
+  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3a, Stage 3b, Stage 4, Stage 5
   Columns: (a)–(d) = four chosen tile IDs
 
-Choice A (RAW predictions):
-- Do NOT apply any AOI masking from RGB.
-- Show exactly what the model predicts (including class 0 if it predicts it).
-
+Shows RAW predictions (no extra AOI masking beyond GT==0 invalid masking used for display).
 Writes:
   figures/fig9a_comparison.pdf
 """
 
 from __future__ import annotations
 
-import argparse
+import sys
 from pathlib import Path
+import argparse
 from typing import Dict, List, Tuple
+
+def find_repo_root_for_imports() -> Path:
+    p = Path(__file__).resolve()
+    for parent in [p.parent, *p.parents]:
+        if (parent / "geoseg").is_dir():
+            return parent
+    raise RuntimeError("Could not find repo root for imports")
+
+repo_root = find_repo_root_for_imports()
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
 import numpy as np
 import torch
@@ -36,12 +45,15 @@ from geoseg.datasets.biodiversity_dataset import (
 )
 from geoseg.models.ftunetformer import ft_unetformer
 
+
 # -----------------------------------------------------------------------------
 # Plot style
 # -----------------------------------------------------------------------------
 def set_plot_style() -> None:
     plt.rcParams.update({
         "font.family": "serif",
+        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
         "font.size": 12,
         "axes.titlesize": 14,
         "legend.fontsize": 12,
@@ -58,11 +70,13 @@ def set_plot_style() -> None:
 # Classes & palette (canonical from dataset)
 # -----------------------------------------------------------------------------
 CLASS_NAMES: Dict[int, str] = {i: n for i, n in enumerate(CLASSES)}
-CLASS_NAMES[5] = "Semi-nat."  # display only
+# display tweak only:
+if 5 in CLASS_NAMES:
+    CLASS_NAMES[5] = "Semi-nat."
 
 PALETTE: Dict[int, Tuple[int, int, int]] = {i: tuple(rgb) for i, rgb in enumerate(DATASET_PALETTE)}
 
-# Albumentations Normalize() defaults
+# Albumentations Normalize() defaults (used by dataset)
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
@@ -128,6 +142,7 @@ def denormalize_to_uint8(img_t: torch.Tensor) -> np.ndarray:
     img = np.clip(img, 0.0, 1.0)
     return (img * 255.0).round().astype(np.uint8)
 
+
 def colorize_mask(mask: np.ndarray, invalid: np.ndarray | None = None) -> np.ndarray:
     """Convert class-id mask -> RGB. If invalid provided, force those pixels to black."""
     out = np.zeros((*mask.shape, 3), dtype=np.uint8)
@@ -136,7 +151,6 @@ def colorize_mask(mask: np.ndarray, invalid: np.ndarray | None = None) -> np.nda
     if invalid is not None:
         out[invalid] = (0, 0, 0)
     return out
-
 
 
 def make_legend_handles(include_background: bool = True) -> List[Patch]:
@@ -221,7 +235,7 @@ def make_grid_figure(
             fontsize=row_fs, fontweight="bold",
         )
 
-    keys = ["img", "gt", "s1", "s2", "s3", "s4", "s5", "s6"]
+    keys = ["img", "gt", "s1", "s2", "s3a", "s3b", "s4", "s5"]
     for c in range(n_cols):
         col = columns[c]
         for r, k in enumerate(keys):
@@ -256,18 +270,19 @@ def make_grid_figure(
 # -----------------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--img-ids", default="biodiversity_1382,biodiversity_0259,ireland2_0090,den1_0020")
+    ap.add_argument("--img-ids", default="biodiversity_1382,biodiversity_0259,biodiversity_2193,biodiversity_1366  ")
     ap.add_argument("--data-root", default="data/biodiversity_split")
     ap.add_argument("--split-order", default="val,test")
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     ap.add_argument("--out-path", default="figures/fig9a_comparison.pdf")
 
-    ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline_ftunetformer")
-    ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2_replication_ftunetformer")
-    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3_replication_difficulty_ftunetformer")
-    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_replication_difficulty_minoritycrop_ftunetformer")
-    ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_finetune_after_oem_ftunetformer")
-    ap.add_argument("--stage6-ckpt", default="model_weights/biodiversity/stage6_final_kd_ftunetformer")
+    # Match your actual folder names under model_weights/biodiversity/
+    ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
+    ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2_replication")
+    ap.add_argument("--stage3a-ckpt", default="model_weights/biodiversity/stage3a_pretrain")
+    ap.add_argument("--stage3b-ckpt", default="model_weights/biodiversity/stage3b_finetune")
+    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_sampling")
+    ap.add_argument("--stage6-ckpt", default="model_weights/biodiversity/stage6_kd")
 
     args = ap.parse_args()
 
@@ -281,12 +296,12 @@ def main() -> None:
     data_root = (repo_root / args.data_root).resolve()
 
     ckpt_paths = {
-        "s1": resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve())),
-        "s2": resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
-        "s3": resolve_ckpt(str((repo_root / args.stage3_ckpt).resolve())),
-        "s4": resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve())),
-        "s5": resolve_ckpt(str((repo_root / args.stage5_ckpt).resolve())),
-        "s6": resolve_ckpt(str((repo_root / args.stage6_ckpt).resolve())),
+        "s1":  resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve())),
+        "s2":  resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
+        "s3a": resolve_ckpt(str((repo_root / args.stage3a_ckpt).resolve())),
+        "s3b": resolve_ckpt(str((repo_root / args.stage3b_ckpt).resolve())),
+        "s4":  resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve())),
+        "s5":  resolve_ckpt(str((repo_root / args.stage6_ckpt).resolve())),
     }
 
     nets: Dict[str, torch.nn.Module] = {}
@@ -294,6 +309,7 @@ def main() -> None:
         net = build_ftunetformer()
         net = load_net_from_lightning_ckpt(net, ck).to(device)
         nets[k] = net
+        print(f"{k}: {ck}")
 
     columns: List[Dict[str, np.ndarray]] = []
     for img_id in img_ids:
@@ -302,11 +318,11 @@ def main() -> None:
         img_rgb = denormalize_to_uint8(img_t)
         gt = mask_t.detach().cpu().numpy().astype(np.uint8)
 
-        # outside AOI mask = background in GT (matches your Fig1 masks)
+        # Outside AOI mask = GT background (0): show as black consistently
         invalid = (gt == 0)
 
         pred: Dict[str, np.ndarray] = {}
-        for stage_key in ["s1", "s2", "s3", "s4", "s5", "s6"]:
+        for stage_key in ["s1", "s2", "s3a", "s3b", "s4", "s5"]:
             pred[stage_key] = predict_mask(nets[stage_key], img_t, device)
 
         columns.append({
@@ -314,14 +330,13 @@ def main() -> None:
             "gt": colorize_mask(gt, invalid=invalid),
             "s1": colorize_mask(pred["s1"], invalid=invalid),
             "s2": colorize_mask(pred["s2"], invalid=invalid),
-            "s3": colorize_mask(pred["s3"], invalid=invalid),
+            "s3a": colorize_mask(pred["s3a"], invalid=invalid),
+            "s3b": colorize_mask(pred["s3b"], invalid=invalid),
             "s4": colorize_mask(pred["s4"], invalid=invalid),
             "s5": colorize_mask(pred["s5"], invalid=invalid),
-            "s6": colorize_mask(pred["s6"], invalid=invalid),
         })
 
-        print(img_id, "outside pixels (gt==0):", int((gt==0).sum()))
-
+        print(img_id, "outside pixels (gt==0):", int((gt == 0).sum()))
 
     letters = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"]
     col_titles = [letters[i] if i < len(letters) else f"({i})" for i in range(len(columns))]
@@ -331,10 +346,10 @@ def main() -> None:
         "Ground\nTruth",
         "Stage 1:\nBaseline",
         "Stage 2:\n+Replication",
-        "Stage 3:\n+Difficulty-Weighted\nSampling",
-        "Stage 4:\n+Minority-Aware\nCropping",
-        "Stage 5:\n+OEM Integration",
-        "Stage 6:\n+Knowledge\nDistillation",
+        "Stage 3a:\n+OEM\nPre-Training",
+        "Stage 3b:\n+OEM\nFine-Tuning",
+        "Stage 4:\n+Hard × Minority\nSampling",
+        "Stage 5:\n+Knowledge\nDistillation",
     ]
 
     handles = make_legend_handles(include_background=True)

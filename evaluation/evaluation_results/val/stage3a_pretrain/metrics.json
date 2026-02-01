@@ -2,7 +2,7 @@
   "checkpoint": "/home/lainey/Documents/Github/ClassImbalance/model_weights/biodiversity/stage3a_pretrain/stage3a_pretrain.ckpt",
   "split": "val",
   "data_root": "/home/lainey/Documents/Github/ClassImbalance/data/biodiversity_split/val",
-  "date": "2026-01-24T10:50:52",
+  "date": "2026-01-24T21:47:47",
   "ignore_index": 0,
   "OA": 0.8950498840898596,
   "mIoU_excluding_bg": 0.6916442252058288,

@@ -4,6 +4,7 @@
 data/
 pretrain_weights/
 model_weights/
+artifacts/
 
 # --------------------
 # Logs / outputs

@@ -5,33 +5,51 @@ scripts/figures/graphical_abstract.py
 Save GA-ready prediction masks (as separate PNGs) for one chosen tile:
 - Stage 1 (baseline)
 - Stage 4
-- Stage 6
+- Stage 6 (KD)
 
 Outputs:
   figures/graphical_abstract/<img_id>_stage1_baseline.png
-  figures/graphical_abstract/<img_id>_stage4.png
-  figures/graphical_abstract/<img_id>_stage6.png
+  figures/graphical_abstract/<img_id>_stage4_hardxminority.png
+  figures/graphical_abstract/<img_id>_stage6_kd.png
 
-Optional (helpful for GA assembly):
+Optional:
   figures/graphical_abstract/<img_id>_rgb.png
   figures/graphical_abstract/<img_id>_gt.png
 
 Run:
-  python -m scripts.figures.graphical_abstract --img-id biodiversity_1310 --device cuda
+  python scripts/figures/graphical_abstract.py --img-id biodiversity_1310 --device cuda --also-save-rgb-gt
 """
 
 from __future__ import annotations
 
+import sys
 import argparse
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import numpy as np
 import torch
 from PIL import Image
 
+
+# -----------------------------------------------------------------------------
+# Repo root for imports (fixes ModuleNotFoundError: geoseg)
+# -----------------------------------------------------------------------------
+def find_repo_root_for_imports() -> Path:
+    p = Path(__file__).resolve()
+    for parent in [p.parent, *p.parents]:
+        if (parent / "geoseg").is_dir() and (parent / "scripts").is_dir():
+            return parent
+    raise RuntimeError("Could not find repo root for imports")
+
+repo_root = find_repo_root_for_imports()
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+
 from geoseg.datasets.biodiversity_dataset import (
     BiodiversityValDataset,
+    BiodiversityTestWithMasksDataset,
     CLASSES,
     PALETTE as DATASET_PALETTE,
 )
@@ -39,36 +57,26 @@ from geoseg.models.ftunetformer import ft_unetformer
 
 
 # -----------------------------------------------------------------------------
-# Canonical classes & palette (from dataset)
+# Canonical palette
 # -----------------------------------------------------------------------------
-
 PALETTE: Dict[int, Tuple[int, int, int]] = {i: tuple(rgb) for i, rgb in enumerate(DATASET_PALETTE)}
 
-# Albumentations Normalize() defaults (used by your dataset)
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 # -----------------------------------------------------------------------------
-# Utilities
+# Utils
 # -----------------------------------------------------------------------------
-
-def find_repo_root() -> Path:
-    p = Path.cwd().resolve()
-    for _ in range(12):
-        if (p / "scripts").is_dir() and (p / "geoseg").is_dir():
-            return p
-        p = p.parent
-    raise RuntimeError("Could not find repo root. Run from inside the repo.")
-
-
 def resolve_ckpt(path_like: str) -> Path:
     """
     Accept either:
       - a direct .ckpt path
-      - a directory -> pick most recent .ckpt in it (recursive)
+      - a directory -> pick most recent .ckpt under it (recursive)
+    Handles nested run folders (e.g. stage6_kd/stage6_kd/*.ckpt).
     """
     p = Path(path_like).expanduser().resolve()
+
     if p.is_file():
         if p.suffix != ".ckpt":
             raise ValueError(f"Expected a .ckpt file, got: {p}")
@@ -86,10 +94,6 @@ def resolve_ckpt(path_like: str) -> Path:
 
 
 def load_net_from_lightning_ckpt(net: torch.nn.Module, ckpt_path: Path) -> torch.nn.Module:
-    """
-    Load Lightning .ckpt into raw nn.Module.
-    Handles 'net.' or 'model.' prefixes.
-    """
     ckpt = torch.load(str(ckpt_path), map_location="cpu")
     sd = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
 
@@ -118,10 +122,6 @@ def predict_mask(net: torch.nn.Module, img_t: torch.Tensor, device: torch.device
 
 
 def denormalize_to_uint8(img_t: torch.Tensor) -> np.ndarray:
-    """
-    img_t: (C,H,W) float tensor AFTER albu.Normalize(mean/std).
-    returns: (H,W,3) uint8 RGB for plotting/saving.
-    """
     img = img_t.detach().cpu().numpy().astype(np.float32)
     img = img[:3] if img.shape[0] >= 3 else np.repeat(img, 3, axis=0)
     img = (img.transpose(1, 2, 0) * IMAGENET_STD) + IMAGENET_MEAN
@@ -129,18 +129,12 @@ def denormalize_to_uint8(img_t: torch.Tensor) -> np.ndarray:
     return (img * 255.0).round().astype(np.uint8)
 
 
-def make_valid_mask_from_rgb(img_rgb: np.ndarray, thresh: int = 5) -> np.ndarray:
-    """
-    Treat near-black as nodata/outside AOI.
-    Returns (H,W) bool where True means valid imagery.
-    """
-    return (img_rgb[..., 0] > thresh) | (img_rgb[..., 1] > thresh) | (img_rgb[..., 2] > thresh)
-
-
-def colorize_mask(mask: np.ndarray) -> np.ndarray:
+def colorize_mask(mask: np.ndarray, invalid: np.ndarray | None = None) -> np.ndarray:
     out = np.zeros((*mask.shape, 3), dtype=np.uint8)
     for k, rgb in PALETTE.items():
         out[mask == k] = rgb
+    if invalid is not None:
+        out[invalid] = (0, 0, 0)
     return out
 
 
@@ -149,74 +143,94 @@ def save_png(path: Path, arr: np.ndarray) -> None:
     Image.fromarray(arr).save(path)
 
 
+def _try_load_from_split(split_root: Path, img_id: str):
+    if not split_root.exists():
+        return None
+
+    if split_root.name == "val":
+        ds = BiodiversityValDataset(data_root=str(split_root))
+    elif split_root.name == "test":
+        ds = BiodiversityTestWithMasksDataset(data_root=str(split_root))
+    else:
+        return None
+
+    if img_id not in ds.img_ids:
+        return None
+
+    idx = ds.img_ids.index(img_id)
+    item = ds[idx]
+    return item["img"], item["gt_semantic_seg"]
+
+
+def load_tile_any_split(data_root: Path, img_id: str, split_order: List[str]):
+    for sp in split_order:
+        got = _try_load_from_split(data_root / sp, img_id)
+        if got is not None:
+            return got
+    raise FileNotFoundError(f"{img_id} not found under {data_root} in splits {split_order}")
+
+
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--img-id", default="biodiversity_1310", help="Tile stem (no extension).")
-    ap.add_argument("--data-root", default="data/biodiversity_split", help="Root containing val/ etc.")
+    ap.add_argument("--data-root", default="data/biodiversity_split", help="Root containing val/ test/")
+    ap.add_argument("--split-order", default="val,test", help="Search order, e.g. val,test")
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
-    ap.add_argument("--nodata-thresh", type=int, default=5)
 
-    # checkpoints (dirs or .ckpt)
-    ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline_ftunetformer")
-    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_replication_difficulty_minoritycrop_ftunetformer")
-    ap.add_argument("--stage6-ckpt", default="model_weights/biodiversity/stage6_final_kd_ftunetformer")
+    # IMPORTANT: update defaults to your CURRENT folder names
+    ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
+    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_sampling")
+    ap.add_argument("--stage6-ckpt", default="model_weights/biodiversity/stage6_kd")
 
-    ap.add_argument("--out-dir", default="figures/graphical_abstract", help="Output directory.")
-    ap.add_argument("--also-save-rgb-gt", action="store_true", help="Also save RGB + GT PNGs for GA assembly.")
+    ap.add_argument("--out-dir", default="figures/graphical_abstract")
+    ap.add_argument("--also-save-rgb-gt", action="store_true")
     args = ap.parse_args()
 
-    repo_root = find_repo_root()
     device = torch.device("cuda" if args.device == "cuda" and torch.cuda.is_available() else "cpu")
 
-    # load val tile via dataset (keeps identical preprocessing)
-    val_root = (repo_root / args.data_root / "val").resolve()
-    ds = BiodiversityValDataset(data_root=str(val_root))
-    if args.img_id not in ds.img_ids:
-        raise FileNotFoundError(f"{args.img_id} not found in val split under {val_root}")
+    data_root = (repo_root / args.data_root).resolve()
+    split_order = [s.strip() for s in args.split_order.split(",") if s.strip()]
 
-    idx = ds.img_ids.index(args.img_id)
-    item = ds[idx]
-    img_t: torch.Tensor = item["img"]
-    gt_t: torch.Tensor = item["gt_semantic_seg"]
+    # load tile (val first, fallback to test)
+    img_t, gt_t = load_tile_any_split(data_root, args.img_id, split_order)
 
     img_rgb = denormalize_to_uint8(img_t)
-    valid = make_valid_mask_from_rgb(img_rgb, thresh=args.nodata_thresh)
-
     gt = gt_t.detach().cpu().numpy().astype(np.uint8)
-    #gt[~valid] = 0
 
-    # resolve ckpts
+    # Use GT==0 as invalid/outside AOI for display consistency
+    invalid = (gt == 0)
+
+    # resolve checkpoints (robust to nested dirs)
     ckpt_s1 = resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve()))
     ckpt_s4 = resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve()))
     ckpt_s6 = resolve_ckpt(str((repo_root / args.stage6_ckpt).resolve()))
 
-    # load models
+    # load nets
     net_s1 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s1).to(device)
     net_s4 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s4).to(device)
     net_s6 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s6).to(device)
 
     # predict
-    p1 = predict_mask(net_s1, img_t, device)#; p1[~valid] = 0
-    p4 = predict_mask(net_s4, img_t, device)#; p4[~valid] = 0
-    p6 = predict_mask(net_s6, img_t, device)#; p6[~valid] = 0
+    p1 = predict_mask(net_s1, img_t, device)
+    p4 = predict_mask(net_s4, img_t, device)
+    p6 = predict_mask(net_s6, img_t, device)
 
-    # colorize
-    p1_rgb = colorize_mask(p1)
-    p4_rgb = colorize_mask(p4)
-    p6_rgb = colorize_mask(p6)
+    # colorize + apply invalid mask as black
+    p1_rgb = colorize_mask(p1, invalid=invalid)
+    p4_rgb = colorize_mask(p4, invalid=invalid)
+    p6_rgb = colorize_mask(p6, invalid=invalid)
 
     out_dir = (repo_root / args.out_dir).resolve()
     save_png(out_dir / f"{args.img_id}_stage1_baseline.png", p1_rgb)
-    save_png(out_dir / f"{args.img_id}_stage4.png", p4_rgb)
-    save_png(out_dir / f"{args.img_id}_stage6.png", p6_rgb)
+    save_png(out_dir / f"{args.img_id}_stage4_hardxminority.png", p4_rgb)
+    save_png(out_dir / f"{args.img_id}_stage6_kd.png", p6_rgb)
 
     if args.also_save_rgb_gt:
         save_png(out_dir / f"{args.img_id}_rgb.png", img_rgb)
-        save_png(out_dir / f"{args.img_id}_gt.png", colorize_mask(gt))
+        save_png(out_dir / f"{args.img_id}_gt.png", colorize_mask(gt, invalid=invalid))
 
     print("Saved to:", out_dir)
     print("Stage1 ckpt:", ckpt_s1)

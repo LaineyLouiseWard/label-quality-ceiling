@@ -1,5 +1,5 @@
 # Auto-exported from fig7_minority_cropping_schematic.ipynb
-# Locked to biodiversity_0003 with ORIGINAL cropping logic preserved
+# Random vs minority-aware cropping schematic (current repo paths; figure layout unchanged)
 
 import sys
 from pathlib import Path
@@ -18,7 +18,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 def find_repo_root(start: Path) -> Path:
     start = start.resolve()
     for p in [start, *start.parents]:
-        if (p / "geoseg").is_dir() or (p / "data").is_dir():
+        if (p / "geoseg").is_dir() and (p / "config").is_dir():
             return p
     raise FileNotFoundError(f"Could not find repo root from {start}")
 
@@ -26,6 +26,9 @@ repo_root = find_repo_root(Path.cwd())
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
+# -----------------------------------------------------------------------------
+# Paths (schematic tile from biodiversity_raw to keep the same example as original)
+# -----------------------------------------------------------------------------
 DATA_ROOT = repo_root / "data" / "biodiversity_raw"
 MSK_DIR = DATA_ROOT / "masks"
 
@@ -70,22 +73,27 @@ CLASS_NAMES = [
 ]
 
 # -----------------------------------------------------------------------------
-# Settings (matches your original notebook)
+# Settings (match current repo intent)
 # -----------------------------------------------------------------------------
 CROP_SIZE = 512
-IGNORE_INDEX = 255
+IGNORE_INDEX = 0
 NUM_CLASSES = 6
 
-CLASS_INTEREST = [1, 2, 3, 4, 5]
-CLASS_RATIO = [0.05, 0.05, 0.05, 0.03, 0.03]
+# Random crop uses dominance rejection only (V1-like)
 MAX_RATIO = 0.75
+SEED_RANDOM = 3
 
+# Minority-aware crop targets minority classes only (V2-like)
+CLASS_INTEREST = [4, 5]         # Settlement, Semi-natural
+#CLASS_RATIO = [0.01, 0.01]      # minimum fractions
+CLASS_RATIO = [0.01, 0.01]
+SEED_MINORITY = SEED_RANDOM
+
+# Deterministic schematic: pick one allowed scale
 SCALE = 1.5
-SEED_RANDOM = 7
-SEED_MINORITY = 7
 
 # -----------------------------------------------------------------------------
-# FORCE TILE
+# FORCE TILE (same tile id as original code)
 # -----------------------------------------------------------------------------
 mask_path = MSK_DIR / "biodiversity_0003.png"
 assert mask_path.exists(), f"Missing tile: {mask_path}"
@@ -112,18 +120,17 @@ mask_s = resize(
 print("Scaled mask shape:", mask_s.shape)
 
 # -----------------------------------------------------------------------------
-# ORIGINAL SmartCropV1-like (preserved)
+# SmartCropV1-like (random crop with dominance rejection)
 # -----------------------------------------------------------------------------
-def smartcrop_v1_bbox(mask, crop_size=512, max_ratio=0.75, ignore_index=255, seed=0, max_tries=50):
+def smartcrop_v1_bbox(mask, crop_size=512, max_ratio=0.75, ignore_index=0, seed=0, max_tries=50):
     """
-    SmartCropV1-like: reject crops dominated by one class above max_ratio.
+    Random crop with dominance rejection (V1-like).
     Returns (crop_mask, bbox) where bbox=(x1,y1,x2,y2) in scaled-mask coords.
     """
     rng = random.Random(seed)
     h, w = mask.shape[:2]
     tw = th = crop_size
 
-    # If image equals crop size, no choice.
     if w == tw and h == th:
         return mask.copy(), (0, 0, w, h)
 
@@ -149,7 +156,7 @@ def smartcrop_v1_bbox(mask, crop_size=512, max_ratio=0.75, ignore_index=255, see
     return mask[y1:y2, x1:x2].copy(), last_bbox
 
 # -----------------------------------------------------------------------------
-# ORIGINAL SmartCropV2-like (preserved)
+# SmartCropV2-like (minority-aware crop with min presence constraints)
 # -----------------------------------------------------------------------------
 def smartcrop_v2_bbox(
     mask,
@@ -158,13 +165,13 @@ def smartcrop_v2_bbox(
     class_interest=None,
     class_ratio=None,
     max_ratio=0.75,
-    ignore_index=255,
+    ignore_index=0,
     seed=0,
     max_tries=80,
 ):
     """
-    SmartCropV2-like: (A) reject overly-dominant crops, (B) require minimum presence of interest classes.
-    Returns (crop_mask, bbox).
+    Minority-aware crop (V2-like): reject overly-dominant crops and enforce minimum
+    presence of interest classes. Returns (crop_mask, bbox).
     """
     rng = random.Random(seed)
     h, w = mask.shape[:2]
@@ -220,6 +227,8 @@ msk_r, bbox_r = smartcrop_v1_bbox(
     ignore_index=IGNORE_INDEX,
     seed=SEED_RANDOM,
 )
+print("Random bbox:", bbox_r)
+print("Random crop contains settlement:", (msk_r == 4).any(), "semi-natural:", (msk_r == 5).any())
 
 msk_m, bbox_m = smartcrop_v2_bbox(
     mask_s,
@@ -231,14 +240,12 @@ msk_m, bbox_m = smartcrop_v2_bbox(
     ignore_index=IGNORE_INDEX,
     seed=SEED_MINORITY,
 )
-
-print("Random bbox:", bbox_r)
 print("Minority bbox:", bbox_m)
-print("Random crop contains settlement:", (msk_r == 4).any(), "semi-natural:", (msk_r == 5).any())
 print("Minority crop contains settlement:", (msk_m == 4).any(), "semi-natural:", (msk_m == 5).any())
+print("BBoxes equal?:", bbox_r == bbox_m)
 
 # -----------------------------------------------------------------------------
-# Plot (same layout as before)
+# Plot (boxes in BOTH panels; matches caption)
 # -----------------------------------------------------------------------------
 def add_panel_label_above_center(ax, label, fontsize=32):
     ax.text(
@@ -252,7 +259,7 @@ colors = np.array([np.array(COLOR_MAP[i]) / 255.0 for i in range(6)])
 cmap = ListedColormap(colors)
 norm = BoundaryNorm(np.arange(-0.5, 6.5), cmap.N)
 
-def plot_fig7(full_mask, bbox_r, bbox_m, out_pdf: Path):
+def plot_fig7_boxes_both(full_mask, bbox_random, bbox_minority, out_pdf: Path):
     def draw_bbox(ax, bbox):
         x1, y1, x2, y2 = bbox
         ax.imshow(full_mask, cmap=cmap, norm=norm, interpolation="nearest")
@@ -263,7 +270,7 @@ def plot_fig7(full_mask, bbox_r, bbox_m, out_pdf: Path):
                 y2 - y1,
                 fill=False,
                 edgecolor="white",
-                linewidth=2.5,
+                linewidth=4,
             )
         )
         ax.set_axis_off()
@@ -272,11 +279,11 @@ def plot_fig7(full_mask, bbox_r, bbox_m, out_pdf: Path):
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.18], hspace=0.15, wspace=-0.15)
 
     ax1 = fig.add_subplot(gs[0, 0])
-    draw_bbox(ax1, bbox_r)
+    draw_bbox(ax1, bbox_random)
     add_panel_label_above_center(ax1, "(a)")
 
     ax2 = fig.add_subplot(gs[0, 1])
-    draw_bbox(ax2, bbox_m)
+    draw_bbox(ax2, bbox_minority)
     add_panel_label_above_center(ax2, "(b)")
 
     legend_ax = fig.add_subplot(gs[1, :])
@@ -289,4 +296,4 @@ def plot_fig7(full_mask, bbox_r, bbox_m, out_pdf: Path):
     plt.close(fig)
     print("Saved:", out_pdf)
 
-plot_fig7(mask_s, bbox_r, bbox_m, OUT_PDF)
+plot_fig7_boxes_both(mask_s, bbox_r, bbox_m, OUT_PDF)

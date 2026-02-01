@@ -24,7 +24,7 @@ from PIL import Image
 import albumentations as albu
 
 # geometry-aware transforms (mask-aligned)
-from geoseg.datasets.transform import Compose, RandomScale, SmartCropV1
+from geoseg.datasets.transform import Compose, RandomScale, SmartCropV1, SmartCropV2
 
 
 # -----------------------------------------------------------------------------

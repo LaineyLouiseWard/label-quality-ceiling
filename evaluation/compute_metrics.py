@@ -54,11 +54,13 @@ def build_model(num_classes: int = 6) -> torch.nn.Module:
     """Instantiate the FT-UNetFormer architecture used in this repo."""
     return ft_unetformer(num_classes=num_classes, decoder_channels=256)
 
-
 def load_checkpoint_into_model(
     model: torch.nn.Module, ckpt_path: Path, device: torch.device
 ) -> torch.nn.Module:
-    """Load a Lightning .ckpt into the raw nn.Module (handles 'net.'/'model.' prefixes)."""
+    """Load a Lightning .ckpt into the raw student nn.Module.
+
+    KD checkpoints may also include teacher.* keys; we intentionally ignore them.
+    """
     ckpt = torch.load(ckpt_path, map_location=device)
 
     if isinstance(ckpt, dict) and "state_dict" in ckpt:
@@ -68,16 +70,21 @@ def load_checkpoint_into_model(
     else:
         raise ValueError(f"Unexpected checkpoint type: {type(ckpt)}")
 
-    cleaned = {}
-    for k, v in state_dict.items():
-        if k.startswith("net."):
-            cleaned[k.replace("net.", "", 1)] = v
-        elif k.startswith("model."):
-            cleaned[k.replace("model.", "", 1)] = v
-        else:
-            cleaned[k] = v
+    # Prefer student keys stored under "net.*"
+    net_sd = {k.replace("net.", "", 1): v for k, v in state_dict.items() if k.startswith("net.")}
 
-    missing, unexpected = model.load_state_dict(cleaned, strict=False)
+    # Fallback: some checkpoints might store weights directly without net.*
+    if not net_sd:
+        # strip optional "model." prefix if present
+        net_sd = {}
+        for k, v in state_dict.items():
+            if k.startswith("model."):
+                net_sd[k.replace("model.", "", 1)] = v
+            else:
+                net_sd[k] = v
+
+    missing, unexpected = model.load_state_dict(net_sd, strict=False)
+
     if missing:
         logging.warning(
             f"Missing keys (non-fatal): {missing[:10]}{'...' if len(missing) > 10 else ''}"
@@ -86,10 +93,14 @@ def load_checkpoint_into_model(
         logging.warning(
             f"Unexpected keys (non-fatal): {unexpected[:10]}{'...' if len(unexpected) > 10 else ''}"
         )
-    if len(missing) > 50 or len(unexpected) > 50:
-        raise RuntimeError(f"Checkpoint doesn't match FT-UNetFormer-6: {ckpt_path}")
+
+    # IMPORTANT: do NOT crash just because KD checkpoints contain extra modules.
+    # If you still want a safety check, only crash if *most* keys are missing.
+    if len(net_sd) < 100:
+        raise RuntimeError(f"Checkpoint seems to contain no student weights (net.*): {ckpt_path}")
 
     return model
+
 
 
 def _apply_ignore_mask(
@@ -283,6 +294,8 @@ def main() -> None:
             json.dump(metrics, f, indent=2)
 
         plot_confusion_matrix(cm, run_dir)
+        np.save(run_dir / "confusion_matrix.npy", cm)
+        np.savetxt(run_dir / "confusion_matrix.csv", cm, fmt="%d", delimiter=",")
 
         iou_no_bg = [metrics["per_class_iou"][c] for c in CLASS_NAMES_5]
         f1_no_bg = [metrics["per_class_f1"][c] for c in CLASS_NAMES_5]

@@ -1,19 +1,23 @@
 """
-Stage 5: Knowledge Distillation (KD) on top of Stage 4 sampling (cumulative).
+Stage 6: Knowledge Distillation (KD) on top of Stage 4 sampling (cumulative).
 
-Target: Biodiversity TIFF only (your split)
+Goal: add a *gentle* KD regulariser without overriding the strong Stage 4 solution.
 
-Cumulative components kept ON:
+Cumulative ON:
 - replication (train_rep split)
-- Stage 4 sampling distribution (WeightedRandomSampler from artifacts/stage4_weights.tsv)
-- minority-aware cropping (train_aug_minority)
+- Stage 4 hard × minority-rich sampling (WeightedRandomSampler from stage4_sampling_weights.tsv)
+- Stage 4 train-time augmentation policy (random crops, NOT minority cropping)
 
 PLUS:
 - knowledge distillation (teacher -> student)
 
 IMPORTANT:
 - ignore_index = 0 everywhere
-- run via: PYTHONPATH=. python -m train.train_kd -c config/biodiversity/stage5_kd.py
+- student initialises from Stage 4 checkpoint
+- KD is kept weak via low kd_alpha
+
+Run:
+  PYTHONPATH=. python -m train.train_kd -c config/biodiversity/stage6_kd.py
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from geoseg.datasets.biodiversity_dataset import (
     BiodiversityTrainDataset,
     BiodiversityValDataset,
     BiodiversityTestDataset,
-    train_aug_minority,
+    train_aug_random,
     val_aug,
 )
 from geoseg.models.ftunetformer import ft_unetformer
@@ -39,7 +43,7 @@ from geoseg.utils.optim import Lookahead, process_model_params
 
 
 # ======================
-# Training hyperparams (keep consistent with your chosen "fair ablation" baseline)
+# Training hyperparams (match your "fair ablation" base)
 # ======================
 max_epoch = 45
 ignore_index = 0
@@ -57,20 +61,21 @@ classes = CLASSES
 
 
 # ======================
-# KD parameters
+# KD parameters (KEEP GENTLE)
 # ======================
-kd_enabled = True               # explicitly on (train_kd will still guard on teacher != None)
+kd_enabled = True
 kd_temperature = 2.0
-kd_alpha = 0.3
+kd_alpha = 0.10  # <-- LOW so KD doesn't override Stage 4
 rangeland_split_alpha = 0.7
 
+# produced by scripts.export_teacher_checkpoint from model_weights/teacher/teacher.ckpt
 teacher_checkpoint = "pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth"
 
 
 # ======================
 # Logging / checkpoints
 # ======================
-weights_name = "stage5_kd"
+weights_name = "stage6_kd"
 weights_path = f"model_weights/biodiversity/{weights_name}"
 test_weights_name = weights_name
 log_name = f"biodiversity/{weights_name}"
@@ -82,7 +87,7 @@ save_last = False
 check_val_every_n_epoch = 1
 gpus = "auto"
 
-# Initialise student from Stage 4 sampling (recommended for your new stage order)
+# Initialise student from Stage 4 (do NOT start from scratch)
 pretrained_ckpt_path = (
     "model_weights/biodiversity/stage4_sampling/"
     "stage4_sampling.ckpt"
@@ -137,11 +142,11 @@ use_aux_loss = False
 
 
 # ======================
-# Datasets
+# Datasets (match Stage 4 policy: random crops)
 # ======================
 train_dataset = BiodiversityTrainDataset(
     data_root="data/biodiversity_split/train_rep",
-    transform=train_aug_minority,
+    transform=train_aug_random,
 )
 
 val_dataset = BiodiversityValDataset(
@@ -155,21 +160,12 @@ test_dataset = BiodiversityTestDataset(
 
 
 # ======================
-# Stage 4 sampling weights (robust: align by img_id)
+# Stage 4 sampling weights (align by img_id)
 # ======================
-def _norm_id(x: str) -> str:
-    # If you have replicated ids like "..._rep1", normalise to base id for lookup.
-    if "_rep" in x:
-        base, rep = x.rsplit("_rep", 1)
-        if rep.isdigit():
-            return base
-    return x
-
-
 here = Path(__file__).resolve()
 repo_root = next((p for p in here.parents if (p / "artifacts").exists()), here.parents[2])
 
-weights_path_tsv = repo_root / "artifacts" / "stage4_weights.tsv"
+weights_path_tsv = repo_root / "artifacts" / "stage4_sampling_weights.tsv"
 if not weights_path_tsv.exists():
     raise FileNotFoundError(
         f"Missing Stage 4 weights: {weights_path_tsv}\n"
@@ -183,22 +179,21 @@ with open(weights_path_tsv, "r", encoding="utf-8") as f:
         if not line:
             continue
         img_id, w = line.split("\t")
-        id_to_weight[_norm_id(img_id)] = float(w)
+        id_to_weight[img_id] = float(w)
 
 sample_weights = []
 missing = 0
 for img_id in train_dataset.img_ids:
-    w = id_to_weight.get(_norm_id(img_id), None)
+    w = id_to_weight.get(img_id, None)
     if w is None:
         sample_weights.append(1.0)
         missing += 1
     else:
         sample_weights.append(w)
 
-print(f"[Stage5 KD] Loaded {len(id_to_weight)} weights. Missing={missing}/{len(train_dataset.img_ids)}")
+print(f"[Stage6 KD] Loaded weights for {len(id_to_weight)} ids. Missing={missing}/{len(train_dataset.img_ids)}")
 if missing > 0:
-    print("[Stage5 KD][WARN] Some train ids missing weights; defaulted to 1.0. Check ID alignment.")
-
+    print("[Stage6 KD][WARN] Some train ids missing weights; defaulted to 1.0. Check ID alignment.")
 
 sampler = WeightedRandomSampler(
     weights=sample_weights,
@@ -230,7 +225,7 @@ val_loader = DataLoader(
 
 
 # ======================
-# Optimizer / scheduler
+# Optimiser / scheduler (match your base)
 # ======================
 layerwise_params = {
     "backbone.*": dict(lr=backbone_lr, weight_decay=backbone_weight_decay)
