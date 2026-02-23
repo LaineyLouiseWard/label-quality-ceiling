@@ -32,46 +32,46 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 # -----------------------
 # Stage 1 — Baseline
 # -----------------------
-#echo "Running Stage 1: Baseline (Biodiversity only)"
-#PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage1_baseline.py
+echo "Running Stage 1: Baseline (Biodiversity only)"
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage1_baseline.py
 
 # -----------------------
 # Stage 2 — Replication
 # -----------------------
-#echo "Running Stage 2: Replication (train_rep)"
-#PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2_replication.py
+echo "Running Stage 2: Replication (train_rep)"
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2_replication.py
 
 # -----------------------
 # Stage 3a — OEM pretrain
 # -----------------------
-#echo "Running Stage 3a: OEM Pretraining (combined OEM+Biodiversity)"
-#PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3a_pretrain.py
+echo "Running Stage 3a: OEM Pretraining (combined OEM+Biodiversity)"
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3a_pretrain.py
 
 # -----------------------
 # Stage 3b — Finetune (init from 3a)
 # -----------------------
-#echo "Running Stage 3b: Finetune on Biodiversity (train_rep) init from Stage 3a"
-#PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3b_finetune.py
+echo "Running Stage 3b: Finetune on Biodiversity (train_rep) init from Stage 3a"
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3b_finetune.py
 
 # -----------------------
 # Build Stage 4 sampling weights (mined from Stage 3b ckpt)
 # -----------------------
-#STAGE3B_CKPT="model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt"
-#OUT_WEIGHTS="artifacts/stage4_sampling_weights.tsv"
+STAGE3B_CKPT="model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt"
+OUT_WEIGHTS="artifacts/stage4_sampling_weights.tsv"
 
-#echo "Building Stage 4 sampling weights from: ${STAGE3B_CKPT}"
-#PYTHONPATH=. python scripts/build_stage4_weights.py \
-#  --ckpt "${STAGE3B_CKPT}" \
-#  --out "${OUT_WEIGHTS}" \
-#  --data_root "data/biodiversity_split/train_rep" \
-#  --batch_size 2 \
-#  --num_workers 4
+echo "Building Stage 4 sampling weights from: ${STAGE3B_CKPT}"
+PYTHONPATH=. python scripts/build_stage4_weights.py \
+  --ckpt "${STAGE3B_CKPT}" \
+  --out "${OUT_WEIGHTS}" \
+  --data_root "data/biodiversity_split/train_rep" \
+  --batch_size 2 \
+  --num_workers 4
 
 # -----------------------
 # Stage 4 — Sampling (init from 3b, sampler only change)
 # -----------------------
-#echo "Running Stage 4: Hard×Minority sampling on top of Stage 3b"
-#PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage4_sampling.py
+echo "Running Stage 4: Hard×Minority sampling on top of Stage 3b"
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage4_sampling.py
 
 # ====================================================================
 # OPTIONAL: Stage 5 — KD consolidation (only if/when you want KD)

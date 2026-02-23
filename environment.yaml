@@ -204,4 +204,3 @@ dependencies:
       - werkzeug==3.1.5
       - xmod==1.8.1
       - yarl==1.22.0
-prefix: /home/lainey/miniconda3/envs/ClassImbalance

@@ -190,10 +190,13 @@ def main():
         log_every_n_steps=10,
         gradient_clip_val=1.0,
         gradient_clip_algorithm="norm",
-        accumulate_grad_batches=2,  # <-- add this
+        accumulate_grad_batches=2,
         precision="bf16-mixed" if torch.cuda.is_available() else 32,
     )
 
+    _accum = trainer.accumulate_grad_batches
+    _phys = config.train_batch_size
+    print(f"[teacher] physical_batch={_phys}  accumulate_grad_batches={_accum}  effective_batch={_phys * _accum}")
 
     trainer.fit(model, config.train_loader, config.val_loader)
 

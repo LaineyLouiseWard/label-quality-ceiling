@@ -173,11 +173,13 @@ class KDTrain(pl.LightningModule):
         f1 = self.val_evaluator.F1()
         oa = self.val_evaluator.OA()
 
-        self.log("val_mIoU", np.nanmean(iou), prog_bar=True)
+        # Foreground-only (exclude background class 0) — matches reported metric.
+        miou_fg = float(np.nanmean(iou[1:]))
+        self.log("val_mIoU", miou_fg, prog_bar=True)
         self.log("val_F1", np.nanmean(f1), prog_bar=True)
         self.log("val_OA", oa, prog_bar=True)
 
-        print("\nval:", {"mIoU": np.nanmean(iou), "F1": np.nanmean(f1), "OA": oa})
+        print("\nval:", {"mIoU": miou_fg, "F1": np.nanmean(f1), "OA": oa})
         print({self.classes[i]: iou[i] for i in range(len(self.classes))})
 
     def configure_optimizers(self):
@@ -256,6 +258,11 @@ def main():
         gradient_clip_val=1.0,
         gradient_clip_algorithm="norm",
         precision="bf16-mixed" if torch.cuda.is_available() else 32,
+    )
+
+    # Fail fast: checkpoint must monitor the foreground-only mIoU logged above.
+    assert config.monitor == "val_mIoU", (
+        f"Checkpoint monitor must be 'val_mIoU' (foreground-only mIoU). Got: '{config.monitor}'"
     )
 
     trainer.fit(model, config.train_loader, config.val_loader)

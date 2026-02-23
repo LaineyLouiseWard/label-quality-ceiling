@@ -38,8 +38,14 @@ from geoseg.datasets.biodiversity_dataset import (
 )
 from geoseg.models.ftunetformer import ft_unetformer
 from geoseg.models.unet import TeacherUNet
-from geoseg.utils.kd_utils import KDHelper, create_mapping_matrix
+from geoseg.utils.kd_utils import KDHelper, create_mapping_matrix, REMAP_OUTPUT_CLASSES
 from geoseg.utils.optim import Lookahead, process_model_params
+
+# Guard: teacher remap output channels must align with student class indices.
+assert REMAP_OUTPUT_CLASSES == CLASSES, (
+    f"KD channel mismatch — teacher remap order {REMAP_OUTPUT_CLASSES} "
+    f"!= student CLASSES {CLASSES}"
+)
 
 
 # ======================
@@ -105,6 +111,12 @@ net = ft_unetformer(
     decoder_channels=256,
 )
 
+assert Path(teacher_checkpoint).exists(), (
+    f"Missing teacher checkpoint: {teacher_checkpoint}\n"
+    "Export it with: python -m scripts.export_teacher_checkpoint "
+    "--ckpt model_weights/teacher/teacher.ckpt "
+    f"--out {teacher_checkpoint}"
+)
 teacher = TeacherUNet(num_classes=9, pretrained=False)
 teacher.load_checkpoint(teacher_checkpoint)
 teacher.freeze()

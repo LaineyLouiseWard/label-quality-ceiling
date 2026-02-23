@@ -18,15 +18,19 @@ OEM_CLASSES = [
     'Unknown'        # 8 -> Background (unknown class)
 ]
 
-# New taxonomy (6 classes)
+# Output channel order — must match biodiversity_dataset.CLASSES exactly.
+# Verified at config-parse time by the assertion in config/biodiversity/stage6_kd.py.
 NEW_CLASSES = [
-    'Forest',       # 0
-    'Grassland',    # 1
-    'Cropland',     # 2
-    'Settlement',   # 3
-    'SemiNatural',  # 4
-    'Background'    # 5
+    'Background',   # 0
+    'Forest',       # 1
+    'Grassland',    # 2
+    'Cropland',     # 3
+    'Settlement',   # 4
+    'Seminatural',  # 5
 ]
+
+# Tuple form for equality comparison against biodiversity_dataset.CLASSES.
+REMAP_OUTPUT_CLASSES = tuple(NEW_CLASSES)
 
 def create_mapping_matrix(alpha=0.7, class_weights=None):
     """Create 9x6 mapping matrix M that maps OEM classes to new taxonomy.
@@ -41,17 +45,18 @@ def create_mapping_matrix(alpha=0.7, class_weights=None):
     # Initialize mapping matrix
     M = torch.zeros(len(OEM_CLASSES), len(NEW_CLASSES))
     
-    # Define mappings
-    M[0, 0] = 1.0  # Tree -> Forest
-    M[1, 1] = alpha  # Rangeland -> Grassland (alpha)
-    M[1, 4] = 1.0 - alpha  # Rangeland -> SemiNatural (1-alpha)
-    M[2, 2] = 1.0  # Cropland -> Cropland
-    M[3, 3] = 1.0  # Developed -> Settlement
-    M[4, 3] = 1.0  # Road -> Settlement
-    M[5, 4] = 1.0  # Bareland -> SemiNatural
-    M[6, 5] = 1.0  # Water -> Background
-    M[7, 5] = 1.0  # Background -> Background
-    M[8, 5] = 1.0  # Unknown -> Background
+    # Column indices match NEW_CLASSES order:
+    # Background=0, Forest=1, Grassland=2, Cropland=3, Settlement=4, Seminatural=5
+    M[0, 1] = 1.0            # Tree        -> Forest      (col 1)
+    M[1, 2] = alpha          # Rangeland   -> Grassland   (col 2, alpha)
+    M[1, 5] = 1.0 - alpha   # Rangeland   -> Seminatural (col 5, 1-alpha)
+    M[2, 3] = 1.0            # Cropland    -> Cropland    (col 3)
+    M[3, 4] = 1.0            # Developed   -> Settlement  (col 4)
+    M[4, 4] = 1.0            # Road        -> Settlement  (col 4)
+    M[5, 5] = 1.0            # Bareland    -> Seminatural (col 5)
+    M[6, 0] = 1.0            # Water       -> Background  (col 0)
+    M[7, 0] = 1.0            # Background  -> Background  (col 0)
+    M[8, 0] = 1.0            # Unknown     -> Background  (col 0)
     
     # Apply class weights to boost minority classes
     if class_weights is not None:

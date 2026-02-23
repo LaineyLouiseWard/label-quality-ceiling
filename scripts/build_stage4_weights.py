@@ -103,8 +103,10 @@ def main():
         pin_memory=torch.cuda.is_available(),
     )
 
-    hardness = {}
-    richness = {}
+    hardness_sum: dict[str, float] = {}
+    hardness_cnt: dict[str, int] = {}
+    richness_sum: dict[str, float] = {}
+    richness_cnt: dict[str, int] = {}
 
     for batch in dl:
         img = batch["img"].to(device)
@@ -117,12 +119,14 @@ def main():
 
         for i, img_id in enumerate(ids):
             key = _norm_id(img_id)
-            hardness[key] = err[i].item()
-            richness[key] = rich[i].item()
+            hardness_sum[key] = hardness_sum.get(key, 0.0) + err[i].item()
+            hardness_cnt[key] = hardness_cnt.get(key, 0) + 1
+            richness_sum[key] = richness_sum.get(key, 0.0) + rich[i].item()
+            richness_cnt[key] = richness_cnt.get(key, 0) + 1
 
-    keys = sorted(hardness.keys())
-    h = np.array([hardness[k] for k in keys])
-    r = np.array([richness[k] for k in keys])
+    keys = sorted(hardness_sum.keys())
+    h = np.array([hardness_sum[k] / hardness_cnt[k] for k in keys])
+    r = np.array([richness_sum[k] / richness_cnt[k] for k in keys])
 
     w_raw = (h + args.eps) ** args.beta_temper * (r + args.eps) ** args.gamma_rich
     w_clip = np.clip(

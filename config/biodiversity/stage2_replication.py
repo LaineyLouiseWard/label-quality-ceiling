@@ -30,9 +30,9 @@ ignore_index = 0
 train_batch_size = 2
 val_batch_size = 2
 
-lr = 6e-4
+lr = 3e-4
 weight_decay = 2.5e-4
-backbone_lr = 6e-5
+backbone_lr = 3e-5
 backbone_weight_decay = 2.5e-4
 
 num_classes = 6

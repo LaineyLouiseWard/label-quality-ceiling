@@ -159,7 +159,7 @@ def evaluate_checkpoint(
         for true, pred in zip(masks, preds):
             t_flat, p_flat = _apply_ignore_mask(true, pred, ignore_index)
             cm += confusion_matrix(t_flat, p_flat, labels=list(range(6)))
-            evaluator.add_batch(true, pred)
+            evaluator.add_batch(t_flat, p_flat)
 
     iou_all = evaluator.Intersection_over_Union()
     f1_all = evaluator.F1()

@@ -61,6 +61,8 @@ gpus = "auto"
 # -------------------------
 net = TeacherUNet(num_classes=num_classes, pretrained=True)
 
+# Teacher loss: smooth_factor=0.0 and smooth=0.0 are deliberate.
+# Student stages use eps=0.05 (paper Section 2.7); teacher training does not.
 loss = JointLoss(
     SoftCrossEntropyLoss(smooth_factor=0.0, ignore_index=ignore_index),
     DiceLoss(smooth=0.0, ignore_index=ignore_index),
