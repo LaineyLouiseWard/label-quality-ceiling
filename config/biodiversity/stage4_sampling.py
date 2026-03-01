@@ -135,7 +135,7 @@ weights_path_tsv = repo_root / "artifacts" / "stage4_sampling_weights.tsv"
 if not weights_path_tsv.exists():
     raise FileNotFoundError(
         f"Missing Stage 4 weights: {weights_path_tsv}\n"
-        "Generate with: python scripts/build_stage4_weights.py --ckpt <stage3b_ckpt>"
+        "Generate with: python scripts/data_prep/build_stage4_weights.py --ckpt <stage3b_ckpt>"
     )
 
 id_to_weight = {}

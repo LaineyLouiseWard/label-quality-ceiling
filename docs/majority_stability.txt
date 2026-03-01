@@ -1,1 +1,0 @@
-Across all stage transitions (1→2, 2→3b, 3b→4, 4→5), the maximum observed majority-class IoU decline was 0.90 pp (Cropland, Stage 3b→4); all other majority-class changes were non-negative, confirming that minority-class gains were not achieved at the expense of majority-class performance.

@@ -19,7 +19,7 @@ OEM_CLASSES = [
 ]
 
 # Output channel order — must match biodiversity_dataset.CLASSES exactly.
-# Verified at config-parse time by the assertion in config/biodiversity/stage6_kd.py.
+# Verified at config-parse time by the assertion in config/biodiversity/stage5_kd.py.
 NEW_CLASSES = [
     'Background',   # 0
     'Forest',       # 1

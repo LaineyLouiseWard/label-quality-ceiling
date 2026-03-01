@@ -7,7 +7,7 @@ Fair ablation rule (for the paper):
 - Validation is Biodiversity-only to avoid OEM leakage into reported val curves.
 
 Run with:
-  PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_oem_pretrain.py
+  PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3a_pretrain.py
 """
 
 from __future__ import annotations

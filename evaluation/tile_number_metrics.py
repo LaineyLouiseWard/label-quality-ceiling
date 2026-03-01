@@ -273,7 +273,7 @@ def main() -> None:
     print(f"{'Stage 3–4':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles (same pool; different sampling/cropping)")
     print(f"{'Stage 5 pre':<12} Combined pretrain train pool:     {fmt(combined_train.paired)} paired tiles")
     print(f"{'Stage 5 ft':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles")
-    print(f"{'Stage 6':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles (teacher supervision)")
+    print(f"{'Stage 5':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles (teacher supervision)")
     print(f"{'Eval':<12} Biodiversity val/test pools:       {fmt(biodiv_val.paired)} / {fmt(biodiv_test.paired)} paired tiles")
 
     if args.out_json:

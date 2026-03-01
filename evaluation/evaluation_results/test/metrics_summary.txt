@@ -2,17 +2,17 @@ Found 1 evaluated checkpoints under: evaluation/evaluation_results/test
 
 mIoU_excluding_bg (sorted desc)
 ======================================================================
-0.4767  | stage6_final_kd_ftunetformer.ckpt
+0.4767  | stage5_final_kd_ftunetformer.ckpt
 
 mF1_excluding_bg (sorted desc)
 ======================================================================
-0.6082  | stage6_final_kd_ftunetformer.ckpt
+0.6082  | stage5_final_kd_ftunetformer.ckpt
 
 OA (sorted desc)
 ======================================================================
-0.8075  | stage6_final_kd_ftunetformer.ckpt
+0.8075  | stage5_final_kd_ftunetformer.ckpt
 
 
 Full listing:
 ======================================================================
-0.4767 mIoU | 0.6082 mF1 | 0.8075 OA | stage6_final_kd_ftunetformer.ckpt
+0.4767 mIoU | 0.6082 mF1 | 0.8075 OA | stage5_final_kd_ftunetformer.ckpt

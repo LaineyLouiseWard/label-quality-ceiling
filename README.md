@@ -13,6 +13,10 @@ conda env create -f environment.yaml
 conda activate ClassImbalance
 ```
 
+For a complete walkthrough covering data preparation, training, evaluation,
+supplementary analyses, and figure generation, see
+[docs/RUNBOOK.md](docs/RUNBOOK.md).
+
 ---
 
 ## Train
@@ -32,16 +36,16 @@ PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3a_pr
 PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3b_finetune.py
 
 # Build Stage 4 sampling weights from Stage 3b checkpoint:
-PYTHONPATH=. python scripts/build_stage4_weights.py \
+PYTHONPATH=. python scripts/data_prep/build_stage4_weights.py \
   --ckpt model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt \
   --out  artifacts/stage4_sampling_weights.tsv
 
 PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage4_sampling.py
 PYTHONPATH=. python -m train.train_teacher    -c config/teacher/unet_oem.py
-PYTHONPATH=. python -m scripts.export_teacher_checkpoint \
+PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
   --ckpt model_weights/teacher/teacher.ckpt \
   --out  pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
-PYTHONPATH=. python -m train.train_kd         -c config/biodiversity/stage6_kd.py
+PYTHONPATH=. python -m train.train_kd         -c config/biodiversity/stage5_kd.py
 ```
 
 ---
@@ -58,7 +62,7 @@ PYTHONPATH=. python evaluation/compute_metrics.py \
 # Held-out test set (final model only):
 PYTHONPATH=. python evaluation/compute_metrics.py \
   --split test \
-  --base-dir model_weights/biodiversity/stage6_kd \
+  --base-dir model_weights/biodiversity/stage5_kd \
   --data-root data/biodiversity_split/test
 ```
 
@@ -74,19 +78,13 @@ All figures from repo root:
 python scripts/figures/build_all_figures.py --device cuda
 ```
 
-Including supplementary weight-distribution figure:
-
-```bash
-python scripts/figures/build_all_figures.py --device cuda --include-supplementary
-```
-
 Individual figures:
 
 ```bash
 python scripts/figures/Figure01.py          # Biodiversity tile examples (data only)
-python scripts/figures/Figure08.py          # Confusion matrices (artifacts only)
-python scripts/figures/Figure09.py          # Per-class IoU (metrics only)
-python scripts/figures/Figure10.py          # KD pixel transitions
+python scripts/figures/Figure09.py          # Confusion matrices (artifacts only)
+python scripts/figures/Figure10.py          # Per-class IoU (metrics only)
+python scripts/figures/Figure11.py          # KD pixel transitions
 jupyter nbconvert --to notebook --execute scripts/figures/Figure02.ipynb
 ```
 
@@ -101,12 +99,7 @@ All derived from saved evaluation outputs and sampling artefacts — no retraini
 
 | File | Content |
 |------|---------|
-| [docs/majority_stability.txt](docs/majority_stability.txt) | Formalised bound on majority-class IoU decline across stage transitions (max 0.90 pp) |
-| [docs/minority_recall_progression.md](docs/minority_recall_progression.md) | Per-stage recall for Settlement and Semi-natural Grassland (Stages 1–5) |
-| [docs/symmetric_confusion_disclosure.tex](docs/symmetric_confusion_disclosure.tex) | Confirms minority IoU gains reflect genuine class separation (both confusion directions) |
-| [docs/val_test_gap_disclosure.tex](docs/val_test_gap_disclosure.tex) | Per-class val–test IoU gap; largest for semi-natural (17.9 pp) and cropland (12.4 pp) |
-| [docs/stage4_weight_uplift.md](docs/stage4_weight_uplift.md) | Minority tile sampling uplift: 1.26× (settlement), 3.08× (semi-natural) |
-| [docs/stage4_weight_gini.tex](docs/stage4_weight_gini.tex) | Gini coefficient of Stage 4 weight distribution (0.36, moderate concentration) |
+| [docs/robustness_analyses.md](docs/robustness_analyses.md) | All supplementary robustness analyses (A1–A6): minority recall, symmetric confusion, weight uplift, val–test gap, majority stability, Gini coefficient |
 | [docs/paper_code_consistency_audit.md](docs/paper_code_consistency_audit.md) | Full paper–code audit; all numerical claims verified against saved outputs |
 
 ---
@@ -129,3 +122,14 @@ Users with licensed access should place files as follows:
 | OEM teacher weights | `pretrain_weights/` |
 | Stage 4 sampling weights | `artifacts/stage4_sampling_weights.tsv` |
 | Pre-computed evaluation outputs | `evaluation/evaluation_results/` |
+
+---
+
+## Manuscript reproducibility
+
+- `main_proposed.tex` is the current submission-ready manuscript with A1–A6 robustness insertions applied.
+- `docs/robustness_analyses.md` contains the structured A1–A6 analyses (authoritative source for all inserted values).
+- `docs/paper_code_consistency_audit_proposed.md` verifies all 123 numerical claims in `main_proposed.tex` against saved artefacts.
+- `docs/analysis_index.md` maps every reported metric to its source artefact on disk.
+- Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce A1–A6 from saved evaluation outputs and sampling artefacts — no retraining required.
+- Data preparation scripts (split, filter, relabel, combine, replicate, build weights, export checkpoint) are in `scripts/data_prep/`.

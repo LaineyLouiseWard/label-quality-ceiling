@@ -5,12 +5,12 @@ scripts/figures/graphical_abstract.py
 Save GA-ready prediction masks (as separate PNGs) for one chosen tile:
 - Stage 1 (baseline)
 - Stage 4
-- Stage 6 (KD)
+- Stage 5 (KD)
 
 Outputs:
   figures/graphical_abstract/<img_id>_stage1_baseline.png
   figures/graphical_abstract/<img_id>_stage4_hardxminority.png
-  figures/graphical_abstract/<img_id>_stage6_kd.png
+  figures/graphical_abstract/<img_id>_stage5_kd.png
 
 Optional:
   figures/graphical_abstract/<img_id>_rgb.png
@@ -73,7 +73,7 @@ def resolve_ckpt(path_like: str) -> Path:
     Accept either:
       - a direct .ckpt path
       - a directory -> pick most recent .ckpt under it (recursive)
-    Handles nested run folders (e.g. stage6_kd/stage6_kd/*.ckpt).
+    Handles nested run folders (e.g. stage5_kd/stage5_kd/*.ckpt).
     """
     p = Path(path_like).expanduser().resolve()
 
@@ -183,7 +183,7 @@ def main() -> None:
     # IMPORTANT: update defaults to your CURRENT folder names
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
     ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_sampling")
-    ap.add_argument("--stage6-ckpt", default="model_weights/biodiversity/stage6_kd")
+    ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_kd")
 
     ap.add_argument("--out-dir", default="figures/graphical_abstract")
     ap.add_argument("--also-save-rgb-gt", action="store_true")
@@ -206,27 +206,27 @@ def main() -> None:
     # resolve checkpoints (robust to nested dirs)
     ckpt_s1 = resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve()))
     ckpt_s4 = resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve()))
-    ckpt_s6 = resolve_ckpt(str((repo_root / args.stage6_ckpt).resolve()))
+    ckpt_s5 = resolve_ckpt(str((repo_root / args.stage5_ckpt).resolve()))
 
     # load nets
     net_s1 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s1).to(device)
     net_s4 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s4).to(device)
-    net_s6 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s6).to(device)
+    net_s5 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s5).to(device)
 
     # predict
     p1 = predict_mask(net_s1, img_t, device)
     p4 = predict_mask(net_s4, img_t, device)
-    p6 = predict_mask(net_s6, img_t, device)
+    p5 = predict_mask(net_s5, img_t, device)
 
     # colorize + apply invalid mask as black
     p1_rgb = colorize_mask(p1, invalid=invalid)
     p4_rgb = colorize_mask(p4, invalid=invalid)
-    p6_rgb = colorize_mask(p6, invalid=invalid)
+    p5_rgb = colorize_mask(p5, invalid=invalid)
 
     out_dir = (repo_root / args.out_dir).resolve()
     save_png(out_dir / f"{args.img_id}_stage1_baseline.png", p1_rgb)
     save_png(out_dir / f"{args.img_id}_stage4_hardxminority.png", p4_rgb)
-    save_png(out_dir / f"{args.img_id}_stage6_kd.png", p6_rgb)
+    save_png(out_dir / f"{args.img_id}_stage5_kd.png", p5_rgb)
 
     if args.also_save_rgb_gt:
         save_png(out_dir / f"{args.img_id}_rgb.png", img_rgb)
@@ -235,7 +235,7 @@ def main() -> None:
     print("Saved to:", out_dir)
     print("Stage1 ckpt:", ckpt_s1)
     print("Stage4 ckpt:", ckpt_s4)
-    print("Stage6 ckpt:", ckpt_s6)
+    print("Stage5 ckpt:", ckpt_s5)
     print("Device:", device)
 
 

@@ -6,13 +6,12 @@ Single entry point to reproduce all manuscript figures.
 
 Usage:
   python scripts/figures/build_all_figures.py [--device cuda|cpu] [--skip <figN> ...]
-                                               [--include-supplementary]
 
-Figures that require model checkpoints (04, 07, 10) will fail loudly if
+Figures that require model checkpoints (05, 08, 11) will fail loudly if
 checkpoints are missing; all others depend only on data or saved artifacts.
 Figure 03 has no script (manually produced vector diagram).
 
-Notebooks (Figure02, Figure06) are executed via jupyter nbconvert.
+Notebooks (Figure02, Figure07) are executed via jupyter nbconvert.
 """
 
 from __future__ import annotations
@@ -75,9 +74,7 @@ def main() -> None:
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"],
                     help="Device for scripts that run model inference (default: cuda).")
     ap.add_argument("--skip", nargs="*", default=[],
-                    help="Figure numbers to skip, e.g. --skip 04 07 10")
-    ap.add_argument("--include-supplementary", action="store_true",
-                    help="Also run supplementary figure scripts (FigureXX.py).")
+                    help="Figure numbers to skip, e.g. --skip 05 08 11")
     args = ap.parse_args()
 
     skip = set(args.skip)
@@ -88,18 +85,14 @@ def main() -> None:
         ("01", lambda: run_py(SCRIPTS_DIR / "Figure01.py", [], args.device)),
         ("02", lambda: run_nb(SCRIPTS_DIR / "Figure02.ipynb")),
         # 03: no script — manually produced vector diagram
-        ("04", lambda: run_py(SCRIPTS_DIR / "Figure04.py", [], args.device)),
+        ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
         ("05", lambda: run_py(SCRIPTS_DIR / "Figure05.py", [], args.device)),
-        ("06", lambda: run_nb(SCRIPTS_DIR / "Figure06.ipynb")),
-        ("07", lambda: run_py(SCRIPTS_DIR / "Figure07.py", [], args.device)),
+        ("06", lambda: run_py(SCRIPTS_DIR / "Figure06.py", [], args.device)),
+        ("07", lambda: run_nb(SCRIPTS_DIR / "Figure07.ipynb")),
         ("08", lambda: run_py(SCRIPTS_DIR / "Figure08.py", [], args.device)),
         ("09", lambda: run_py(SCRIPTS_DIR / "Figure09.py", [], args.device)),
         ("10", lambda: run_py(SCRIPTS_DIR / "Figure10.py", [], args.device)),
-    ]
-
-    # Supplementary figures (no model inference; run only with --include-supplementary)
-    supplementary: list[tuple[str, callable]] = [
-        ("XX (weight dist.)", lambda: run_py_no_device(SCRIPTS_DIR / "FigureXX.py")),
+        ("11", lambda: run_py(SCRIPTS_DIR / "Figure11.py", [], args.device)),
     ]
 
     results: dict[str, bool | str] = {}
@@ -110,10 +103,6 @@ def main() -> None:
             print(f"\nSkipping Figure {fig_num} (--skip).")
             continue
         results[fig_num] = runner()
-
-    if args.include_supplementary:
-        for label, runner in supplementary:
-            results[label] = runner()
 
     print(f"\n{'='*60}")
     print("Build summary")
