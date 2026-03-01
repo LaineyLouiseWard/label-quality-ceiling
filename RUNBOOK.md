@@ -267,6 +267,21 @@ After C1 completes, a summary is written to:
 evaluation/evaluation_results/val/metrics_summary.txt
 ```
 
+### C4. Export test-set LaTeX table
+
+Generates a bare `tabularx` snippet for inclusion in the manuscript
+(Table 3). Reads the saved test-set `metrics.json` from C2; no
+retraining or GPU required.
+
+```bash
+python evaluation/export_final_test_table.py
+```
+
+**Input:** `evaluation/evaluation_results/test/stage5_final_kd_ftunetformer/metrics.json`
+**Output:** `evaluation/evaluation_results/final_test_table.tex`
+
+Include in the manuscript with `\input{evaluation/evaluation_results/final_test_table.tex}`.
+
 ---
 
 ## D. Supplementary analyses (A1--A6)
@@ -290,7 +305,7 @@ PYTHONPATH=. python scripts/analysis/a6_weight_gini.py
 - `artifacts/stage4_sampling_weights.tsv` (A3, A6)
 - `artifacts/train_augmentation_list.json` (A3)
 
-**Output:** printed tables matching [docs/robustness_analyses.md](robustness_analyses.md).
+**Output:** printed tables matching [docs/robustness_analyses.md](docs/robustness_analyses.md).
 
 ---
 
@@ -319,7 +334,7 @@ python scripts/figures/build_all_figures.py --device cuda
 | 11 | `python scripts/figures/Figure11.py` | Stage 1 + Stage 5 checkpoints, `data/biodiversity_split/val/` |
 
 All outputs are written to `figures/`.
-See [FIGURE_MAP.md](../FIGURE_MAP.md) for full per-figure dependency lists.
+See [FIGURE_MAP.md](FIGURE_MAP.md) for full per-figure dependency lists.
 
 ---
 

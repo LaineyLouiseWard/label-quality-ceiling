@@ -15,7 +15,7 @@ conda activate ClassImbalance
 
 For a complete walkthrough covering data preparation, training, evaluation,
 supplementary analyses, and figure generation, see
-[docs/RUNBOOK.md](docs/RUNBOOK.md).
+[RUNBOOK.md](RUNBOOK.md).
 
 ---
 
