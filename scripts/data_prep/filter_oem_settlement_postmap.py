@@ -81,6 +81,9 @@ def main() -> None:
     if not in_images.is_dir() or not in_masks.is_dir():
         raise FileNotFoundError(f"Expected {in_images} and {in_masks} to exist.")
 
+    if args.overwrite and out_root.exists() and any(out_root.iterdir()):
+        shutil.rmtree(out_root)
+
     ensure_dir(out_images)
     ensure_dir(out_masks)
 

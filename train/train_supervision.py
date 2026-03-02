@@ -48,6 +48,8 @@ def seed_everything(seed: int = 42):
 def get_args():
     p = argparse.ArgumentParser()
     p.add_argument("-c", "--config_path", type=Path, required=True)
+    p.add_argument("--force", action="store_true",
+                   help="Overwrite existing checkpoint without prompting.")
     return p.parse_args()
 
 
@@ -201,6 +203,16 @@ def main():
 
     if getattr(config, "pretrained_ckpt_path", None):
         _load_student_weights_from_pl_ckpt(model.net, config.pretrained_ckpt_path)
+
+    ckpt_out = Path(config.weights_path) / f"{config.weights_name}.ckpt"
+    if ckpt_out.exists() and not args.force:
+        raise FileExistsError(
+            f"Checkpoint already exists: {ckpt_out}\n"
+            "Pass --force to overwrite."
+        )
+    if ckpt_out.exists() and args.force:
+        ckpt_out.unlink()
+        logging.info(f"Removed existing checkpoint: {ckpt_out}")
 
     checkpoint_cb = ModelCheckpoint(
         dirpath=config.weights_path,

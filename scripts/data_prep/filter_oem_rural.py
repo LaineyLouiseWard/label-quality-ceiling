@@ -57,6 +57,14 @@ def main() -> None:
     raw_root = Path(args.raw_root)
     out_root = Path(args.out_root)
 
+    if out_root.exists() and any(out_root.iterdir()):
+        if not args.overwrite:
+            raise FileExistsError(
+                f"Output directory is not empty: {out_root}\n"
+                "Pass --overwrite to regenerate (stale tiles may otherwise persist)."
+            )
+        shutil.rmtree(out_root)
+
     img_out = out_root / "images"
     msk_out = out_root / "masks"
     img_out.mkdir(parents=True, exist_ok=True)
@@ -64,12 +72,30 @@ def main() -> None:
 
     kept = dropped = 0
 
-    for region in tqdm(sorted(raw_root.iterdir()), desc="Regions"):
+    if not raw_root.is_dir():
+        raise FileNotFoundError(f"OEM raw-root not found: {raw_root}")
+
+    regions = sorted(p for p in raw_root.iterdir() if p.is_dir())
+    valid_regions = [r for r in regions if (r / "labels").is_dir() and (r / "images").is_dir()]
+    total_labels = sum(len(list((r / "labels").glob("*.tif"))) for r in valid_regions)
+
+    print(f"\n[filter_oem_rural] Input diagnostics:")
+    print(f"  raw-root:      {raw_root}")
+    print(f"  subdirs found: {len(regions)}")
+    print(f"  valid regions: {len(valid_regions)} (with images/ and labels/)")
+    print(f"  total labels:  {total_labels}")
+
+    if total_labels == 0:
+        raise FileNotFoundError(
+            f"No OEM label tiles (*.tif) found under {raw_root}.\n"
+            f"  subdirs found: {len(regions)}, valid regions: {len(valid_regions)}\n"
+            "  Check that --raw-root points to the directory containing "
+            "<region>/{images,labels}/ subdirectories."
+        )
+
+    for region in tqdm(valid_regions, desc="Regions"):
         label_dir = region / "labels"
         image_dir = region / "images"
-
-        if not label_dir.is_dir() or not image_dir.is_dir():
-            continue
 
         for label_path in label_dir.glob("*.tif"):
             pct = built_env_percentage(label_path)
@@ -107,7 +133,14 @@ def main() -> None:
     print(f"  threshold: {args.threshold}% built environment")
     print(f"  kept:      {kept}")
     print(f"  dropped:   {dropped}")
-    print(f"  output:   {out_root.resolve()}")
+    print(f"  output:    {out_root.resolve()}")
+
+    if kept == 0:
+        raise RuntimeError(
+            f"All {dropped} OEM tiles exceeded the {args.threshold}% built-environment "
+            f"threshold — 0 tiles kept.\n"
+            f"  Check --raw-root ({raw_root}) and --threshold ({args.threshold})."
+        )
 
 
 if __name__ == "__main__":

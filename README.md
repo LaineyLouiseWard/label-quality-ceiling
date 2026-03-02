@@ -24,7 +24,7 @@ supplementary analyses, and figure generation, see
 Full pipeline (all stages in order):
 
 ```bash
-bash train_pipeline.sh
+bash RUNBOOK.sh
 ```
 
 Individual stages:

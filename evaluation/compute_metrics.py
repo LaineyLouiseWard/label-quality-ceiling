@@ -255,6 +255,8 @@ def main() -> None:
         default=0,
         help="Label value to ignore in evaluation (biodiversity: 0).",
     )
+    ap.add_argument("--force", action="store_true",
+                    help="Overwrite existing evaluation outputs without prompting.")
     args = ap.parse_args()
 
     base_dir = Path(args.base_dir).resolve()
@@ -277,6 +279,14 @@ def main() -> None:
         safe_name = ckpt.parent.name # Should only be keeping one checkpoint per ablation stage.
         run_dir = out_root / safe_name
         run_dir.mkdir(parents=True, exist_ok=True)
+
+        existing_metrics = run_dir / "metrics.json"
+        if existing_metrics.exists() and not args.force:
+            logging.warning(
+                f"Skipping {safe_name}: {existing_metrics} already exists. "
+                "Pass --force to overwrite."
+            )
+            continue
 
         logging.info(f"Evaluating: {ckpt}")
 

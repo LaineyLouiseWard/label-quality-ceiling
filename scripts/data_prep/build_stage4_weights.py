@@ -67,6 +67,8 @@ def parse_args():
     p.add_argument("--clip_lo", type=float, default=5.0)
     p.add_argument("--clip_hi", type=float, default=95.0)
     p.add_argument("--eps", type=float, default=1e-6)
+    p.add_argument("--force", action="store_true",
+                   help="Overwrite existing output without prompting.")
     return p.parse_args()
 
 
@@ -84,7 +86,13 @@ def load_student(net, ckpt_path):
 @torch.no_grad()
 def main():
     args = parse_args()
-    os.makedirs(Path(args.out).parent, exist_ok=True)
+    out_path = Path(args.out)
+    if out_path.exists() and not args.force:
+        raise FileExistsError(
+            f"Output already exists: {out_path}\n"
+            "Pass --force to overwrite."
+        )
+    os.makedirs(out_path.parent, exist_ok=True)
 
     ds = BiodiversityTrainDataset(args.data_root, transform=val_aug)
 

@@ -13,12 +13,37 @@ conda activate ClassImbalance
 
 ---
 
+## Full overwrite run
+
+To reproduce **everything** end-to-end in a single command
+(data prep, training, evaluation, figures):
+
+```bash
+bash RUNBOOK.sh
+```
+
+**Warning:** This overwrites all derived outputs in-place — checkpoints,
+sampling weights, evaluation results, and figures. Raw data
+(`data/biodiversity_raw/`, `data/openearthmap_raw/`) is never modified.
+
+---
+
 ## Prerequisites
 
 | Asset | Expected location | Source |
 |-------|-------------------|--------|
 | Biodiversity imagery + masks | `data/biodiversity_raw/` | ODOS Technologies (licensed) |
 | OpenEarthMap tiles | `data/openearthmap_raw/` | [open-earth-map.org](https://open-earth-map.org) |
+
+Both datasets are **required**.  The pipeline will abort at startup if
+either is missing (see preflight checks in `RUNBOOK.sh`).
+
+The OEM raw root must contain `OpenEarthMap/OpenEarthMap_wo_xBD/<region>/{images,labels}/`.
+The canonical path used by `RUNBOOK.sh` is:
+
+```
+data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/
+```
 
 The Biodiversity dataset is not publicly redistributable.
 Users with licensed access should place raw files before proceeding.
@@ -27,7 +52,7 @@ Users with licensed access should place raw files before proceeding.
 
 ## A. Data preparation
 
-Steps A1--A7 transform raw datasets into the splits, replicated sets,
+Steps A1--A8 transform raw datasets into the splits, replicated sets,
 and combined datasets consumed by training.
 
 ### A1. Split Biodiversity into train / val / test
@@ -36,7 +61,7 @@ and combined datasets consumed by training.
 PYTHONPATH=. python scripts/data_prep/split_biodiversity_dataset.py \
   --in-root  data/biodiversity_raw \
   --out-root data/biodiversity_split \
-  --seed 42 --mode copy
+  --seed 42 --mode copy --overwrite
 ```
 
 **Input:** `data/biodiversity_raw/{images,masks}/`
@@ -47,7 +72,8 @@ PYTHONPATH=. python scripts/data_prep/split_biodiversity_dataset.py \
 ```bash
 PYTHONPATH=. python scripts/data_prep/analyze_class_distribution.py \
   --data-root data/biodiversity_split/train \
-  --out       artifacts/train_augmentation_list.json
+  --out       artifacts/train_augmentation_list.json \
+  --overwrite
 ```
 
 **Input:** `data/biodiversity_split/train/masks/`
@@ -59,7 +85,8 @@ PYTHONPATH=. python scripts/data_prep/analyze_class_distribution.py \
 PYTHONPATH=. python scripts/data_prep/replicate_minority_samples.py \
   --data-root          data/biodiversity_split/train \
   --augmentation-list  artifacts/train_augmentation_list.json \
-  --out-root           data/biodiversity_split/train_rep
+  --out-root           data/biodiversity_split/train_rep \
+  --overwrite
 ```
 
 **Input:** `data/biodiversity_split/train/`, `artifacts/train_augmentation_list.json`
@@ -69,11 +96,12 @@ PYTHONPATH=. python scripts/data_prep/replicate_minority_samples.py \
 
 ```bash
 PYTHONPATH=. python scripts/data_prep/filter_oem_rural.py \
-  --raw-root data/openearthmap_raw \
-  --out-root data/openearthmap_filtered
+  --raw-root data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD \
+  --out-root data/openearthmap_filtered \
+  --overwrite
 ```
 
-**Input:** `data/openearthmap_raw/<region>/{images,labels}/`
+**Input:** `data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/<region>/{images,labels}/`
 **Output:** `data/openearthmap_filtered/{images,masks}/`
 
 ### A5. Relabel OEM to 6-class taxonomy
@@ -81,7 +109,8 @@ PYTHONPATH=. python scripts/data_prep/filter_oem_rural.py \
 ```bash
 PYTHONPATH=. python scripts/data_prep/relabel_oem_taxonomy.py \
   --in-root  data/openearthmap_filtered \
-  --out-root data/openearthmap_relabelled
+  --out-root data/openearthmap_relabelled \
+  --overwrite
 ```
 
 **Input:** `data/openearthmap_filtered/{images,masks}/`
@@ -92,7 +121,8 @@ PYTHONPATH=. python scripts/data_prep/relabel_oem_taxonomy.py \
 ```bash
 PYTHONPATH=. python scripts/data_prep/filter_oem_settlement_postmap.py \
   --in-root  data/openearthmap_relabelled \
-  --out-root data/openearthmap_relabelled_filtered
+  --out-root data/openearthmap_relabelled_filtered \
+  --overwrite
 ```
 
 **Input:** `data/openearthmap_relabelled/`
@@ -104,7 +134,8 @@ PYTHONPATH=. python scripts/data_prep/filter_oem_settlement_postmap.py \
 PYTHONPATH=. python scripts/data_prep/create_biodiversity_oem_combined.py \
   --bio-root data/biodiversity_split \
   --oem-root data/openearthmap_relabelled_filtered \
-  --out-root data/biodiversity_oem_combined
+  --out-root data/biodiversity_oem_combined \
+  --overwrite
 ```
 
 **Input:** `data/biodiversity_split/`, `data/openearthmap_relabelled_filtered/`
@@ -116,7 +147,8 @@ PYTHONPATH=. python scripts/data_prep/create_biodiversity_oem_combined.py \
 PYTHONPATH=. python scripts/data_prep/prepare_oem_teacher_data.py \
   --raw-root data/openearthmap_relabelled_filtered \
   --out-root data/openearthmap_teacher \
-  --seed 42
+  --seed 42 \
+  --overwrite
 ```
 
 **Input:** `data/openearthmap_relabelled_filtered/`
@@ -130,14 +162,14 @@ Stages run sequentially; each depends on the checkpoint from the
 previous stage. The full pipeline can also be run via:
 
 ```bash
-bash train_pipeline.sh
+bash RUNBOOK.sh
 ```
 
 ### B1. Stage 1 -- Baseline
 
 ```bash
 PYTHONPATH=. python -m train.train_supervision \
-  -c config/biodiversity/stage1_baseline.py
+  -c config/biodiversity/stage1_baseline.py --force
 ```
 
 **Data:** `data/biodiversity_split/train/`
@@ -147,7 +179,7 @@ PYTHONPATH=. python -m train.train_supervision \
 
 ```bash
 PYTHONPATH=. python -m train.train_supervision \
-  -c config/biodiversity/stage2_replication.py
+  -c config/biodiversity/stage2_replication.py --force
 ```
 
 **Data:** `data/biodiversity_split/train_rep/`
@@ -157,7 +189,7 @@ PYTHONPATH=. python -m train.train_supervision \
 
 ```bash
 PYTHONPATH=. python -m train.train_supervision \
-  -c config/biodiversity/stage3a_pretrain.py
+  -c config/biodiversity/stage3a_pretrain.py --force
 ```
 
 **Data:** `data/biodiversity_oem_combined/train/`
@@ -167,7 +199,7 @@ PYTHONPATH=. python -m train.train_supervision \
 
 ```bash
 PYTHONPATH=. python -m train.train_supervision \
-  -c config/biodiversity/stage3b_finetune.py
+  -c config/biodiversity/stage3b_finetune.py --force
 ```
 
 **Data:** `data/biodiversity_split/train_rep/`
@@ -183,7 +215,8 @@ PYTHONPATH=. python scripts/data_prep/build_stage4_weights.py \
   --ckpt      model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt \
   --out       artifacts/stage4_sampling_weights.tsv \
   --data_root data/biodiversity_split/train_rep \
-  --batch_size 2 --num_workers 4
+  --batch_size 2 --num_workers 4 \
+  --force
 ```
 
 **Requires:** Stage 3b checkpoint
@@ -193,7 +226,7 @@ PYTHONPATH=. python scripts/data_prep/build_stage4_weights.py \
 
 ```bash
 PYTHONPATH=. python -m train.train_supervision \
-  -c config/biodiversity/stage4_sampling.py
+  -c config/biodiversity/stage4_sampling.py --force
 ```
 
 **Data:** `data/biodiversity_split/train_rep/`
@@ -204,7 +237,7 @@ PYTHONPATH=. python -m train.train_supervision \
 
 ```bash
 PYTHONPATH=. python -m train.train_teacher \
-  -c config/teacher/unet_oem.py
+  -c config/teacher/unet_oem.py --force
 ```
 
 **Data:** `data/openearthmap_teacher/`
@@ -215,7 +248,8 @@ PYTHONPATH=. python -m train.train_teacher \
 ```bash
 PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
   --ckpt model_weights/teacher/teacher.ckpt \
-  --out  pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
+  --out  pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
+  --force
 ```
 
 **Requires:** Teacher checkpoint from B7
@@ -225,7 +259,7 @@ PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
 
 ```bash
 PYTHONPATH=. python -m train.train_kd \
-  -c config/biodiversity/stage5_kd.py
+  -c config/biodiversity/stage5_kd.py --force
 ```
 
 **Data:** `data/biodiversity_split/train_rep/`
@@ -242,7 +276,9 @@ PYTHONPATH=. python -m train.train_kd \
 PYTHONPATH=. python evaluation/compute_metrics.py \
   --split val \
   --base-dir model_weights/biodiversity \
-  --data-root data/biodiversity_split/val
+  --data-root data/biodiversity_split/val \
+  --out-dir evaluation/evaluation_results/val \
+  --force
 ```
 
 **Output:** `evaluation/evaluation_results/val/<stage>/` containing
@@ -254,18 +290,22 @@ PYTHONPATH=. python evaluation/compute_metrics.py \
 PYTHONPATH=. python evaluation/compute_metrics.py \
   --split test \
   --base-dir model_weights/biodiversity/stage5_kd \
-  --data-root data/biodiversity_split/test
+  --data-root data/biodiversity_split/test \
+  --out-dir evaluation/evaluation_results/test \
+  --force
 ```
 
 **Output:** `evaluation/evaluation_results/test/stage5_final_kd_ftunetformer/`
 
 ### C3. Validation summary
 
-After C1 completes, a summary is written to:
+```bash
+PYTHONPATH=. python evaluation/aggregate_metrics.py \
+  --eval-root evaluation/evaluation_results/val \
+  --out-file  evaluation/evaluation_results/val/metrics_summary.txt
+```
 
-```
-evaluation/evaluation_results/val/metrics_summary.txt
-```
+**Output:** `evaluation/evaluation_results/val/metrics_summary.txt`
 
 ### C4. Export test-set LaTeX table
 

@@ -21,10 +21,17 @@ def main():
     help="Teacher Lightning checkpoint (.ckpt)",
     )
     ap.add_argument("--out", type=str, required=True)
+    ap.add_argument("--force", action="store_true",
+                    help="Overwrite existing output without prompting.")
     args = ap.parse_args()
 
     ckpt_path = Path(args.ckpt)
     out_path = Path(args.out)
+    if out_path.exists() and not args.force:
+        raise FileExistsError(
+            f"Output already exists: {out_path}\n"
+            "Pass --force to overwrite."
+        )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     ckpt = torch.load(str(ckpt_path), map_location="cpu")

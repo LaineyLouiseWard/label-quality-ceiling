@@ -90,6 +90,9 @@ def main() -> None:
     out_images = out_root / "images"
     out_masks = out_root / "masks"
 
+    if args.overwrite and out_root.exists() and any(out_root.iterdir()):
+        shutil.rmtree(out_root)
+
     ensure_dir(out_images)
     ensure_dir(out_masks)
 
