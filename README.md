@@ -4,6 +4,10 @@ Code for *Ward et al., Remote Sensing 2026* — a staged cumulative ablation app
 minority replication, OEM pre-training, hard×minority sampling, and knowledge
 distillation to high-resolution Pléiades satellite imagery with FT-UNetFormer.
 
+This repository contains the complete training pipeline, evaluation scripts,
+supplementary analyses, and figure generation used in the manuscript. A single
+shell script (`RUNBOOK.sh`) reproduces all results end-to-end from raw data.
+
 ---
 
 ## Setup
@@ -24,7 +28,9 @@ supplementary analyses, and figure generation, see
 Full pipeline (all stages in order):
 
 ```bash
-bash RUNBOOK.sh
+bash RUNBOOK.sh                # everything from scratch
+bash RUNBOOK.sh --from B1      # resume from training onward
+bash RUNBOOK.sh --from C1      # resume from evaluation onward
 ```
 
 Individual stages:
@@ -100,7 +106,7 @@ All derived from saved evaluation outputs and sampling artefacts — no retraini
 | File | Content |
 |------|---------|
 | [docs/robustness_analyses.md](docs/robustness_analyses.md) | All supplementary robustness analyses (A1–A6): minority recall, symmetric confusion, weight uplift, val–test gap, majority stability, Gini coefficient |
-| [docs/paper_code_consistency_audit.md](docs/paper_code_consistency_audit.md) | Full paper–code audit; all numerical claims verified against saved outputs |
+| [docs/paper_code_consistency_audit_proposed.md](docs/paper_code_consistency_audit_proposed.md) | Paper–code audit; numerical claims verified against saved outputs |
 
 ---
 

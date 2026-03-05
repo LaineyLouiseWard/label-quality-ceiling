@@ -16,8 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils import load_metrics, REPO_ROOT
 
-VAL_METRICS = REPO_ROOT / "evaluation/evaluation_results/val/stage5_kd/stage5_kd/metrics.json"
-TEST_METRICS = REPO_ROOT / "evaluation/evaluation_results/test/stage5_final_kd_ftunetformer/metrics.json"
+VAL_METRICS = REPO_ROOT / "evaluation/evaluation_results/val/stage5_kd/metrics.json"
+TEST_METRICS = REPO_ROOT / "evaluation/evaluation_results/test/stage5_kd/metrics.json"
 
 # Foreground classes only (skip Background)
 FOREGROUND_CLASSES = [

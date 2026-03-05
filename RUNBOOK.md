@@ -13,14 +13,25 @@ conda activate ClassImbalance
 
 ---
 
-## Full overwrite run
+## Running the pipeline
 
 To reproduce **everything** end-to-end in a single command
-(data prep, training, evaluation, figures):
+(data prep, training, evaluation, analyses, figures):
 
 ```bash
 bash RUNBOOK.sh
 ```
+
+To resume from a specific stage:
+
+```bash
+bash RUNBOOK.sh --from B6   # resume from Stage 4 training onward
+```
+
+Valid stages: `A1`–`A8` (data prep), `B1`–`B9` (training),
+`C1`–`C4` (evaluation), `D` (supplementary analyses), `E` (figures).
+The script validates the `--from` argument and checks that required
+inputs from earlier stages exist before each step.
 
 **Warning:** This overwrites all derived outputs in-place — checkpoints,
 sampling weights, evaluation results, and figures. Raw data
@@ -159,10 +170,10 @@ PYTHONPATH=. python scripts/data_prep/prepare_oem_teacher_data.py \
 ## B. Training (all stages)
 
 Stages run sequentially; each depends on the checkpoint from the
-previous stage. The full pipeline can also be run via:
+previous stage. To run training only:
 
 ```bash
-bash RUNBOOK.sh
+bash RUNBOOK.sh --from B1
 ```
 
 ### B1. Stage 1 -- Baseline
@@ -295,7 +306,7 @@ PYTHONPATH=. python evaluation/compute_metrics.py \
   --force
 ```
 
-**Output:** `evaluation/evaluation_results/test/stage5_final_kd_ftunetformer/`
+**Output:** `evaluation/evaluation_results/test/stage5_kd/`
 
 ### C3. Validation summary
 
@@ -317,7 +328,7 @@ retraining or GPU required.
 python evaluation/export_final_test_table.py
 ```
 
-**Input:** `evaluation/evaluation_results/test/stage5_final_kd_ftunetformer/metrics.json`
+**Input:** `evaluation/evaluation_results/test/stage5_kd/metrics.json`
 **Output:** `evaluation/evaluation_results/final_test_table.tex`
 
 Include in the manuscript with `\input{evaluation/evaluation_results/final_test_table.tex}`.
@@ -341,7 +352,7 @@ PYTHONPATH=. python scripts/analysis/a6_weight_gini.py
 **Inputs:**
 - `evaluation/evaluation_results/val/stage*/confusion_matrix.csv` (A1, A2, A5)
 - `evaluation/evaluation_results/val/stage*/metrics.json` (A4, A5)
-- `evaluation/evaluation_results/test/stage5_final_kd_ftunetformer/metrics.json` (A4)
+- `evaluation/evaluation_results/test/stage5_kd/metrics.json` (A4)
 - `artifacts/stage4_sampling_weights.tsv` (A3, A6)
 - `artifacts/train_augmentation_list.json` (A3)
 

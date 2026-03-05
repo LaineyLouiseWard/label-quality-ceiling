@@ -2,25 +2,25 @@
   "checkpoint": "/home/lainey/Documents/Github/ClassImbalance/model_weights/biodiversity/stage3a_pretrain/stage3a_pretrain.ckpt",
   "split": "val",
   "data_root": "/home/lainey/Documents/Github/ClassImbalance/data/biodiversity_split/val",
-  "date": "2026-01-24T21:47:47",
+  "date": "2026-03-04T21:49:27",
   "ignore_index": 0,
-  "OA": 0.8950498840898596,
-  "mIoU_excluding_bg": 0.6916442252058288,
-  "mF1_excluding_bg": 0.8092713285611177,
+  "OA": 0.8940351104704758,
+  "mIoU_excluding_bg": 0.6907194717997391,
+  "mF1_excluding_bg": 0.8121732875386518,
   "per_class_iou": {
     "Background": 0.0,
-    "Forest land": 0.7072495465574604,
-    "Grassland": 0.880649792222531,
-    "Cropland": 0.757382637169986,
-    "Settlement": 0.6568405794935749,
-    "Seminatural Grassland": 0.4560985705855921
+    "Forest land": 0.7097443301644976,
+    "Grassland": 0.87946926007195,
+    "Cropland": 0.6701636884448898,
+    "Settlement": 0.6543986727695534,
+    "Seminatural Grassland": 0.539821407547805
   },
   "per_class_f1": {
     "Background": 0.0,
-    "Forest land": 0.8285250902140118,
-    "Grassland": 0.936537776640701,
-    "Cropland": 0.8619439122265904,
-    "Settlement": 0.7928832544093708,
-    "Seminatural Grassland": 0.6264666093149146
+    "Forest land": 0.8302344547898866,
+    "Grassland": 0.9358697947955712,
+    "Cropland": 0.8025125787571634,
+    "Settlement": 0.7911015396775545,
+    "Seminatural Grassland": 0.7011480696730835
   }
 }

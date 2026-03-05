@@ -212,7 +212,7 @@ def main():
         )
     if ckpt_out.exists() and args.force:
         ckpt_out.unlink()
-        logging.info(f"Removed existing checkpoint: {ckpt_out}")
+        print(f"[force] Removed existing checkpoint: {ckpt_out}")
 
     checkpoint_cb = ModelCheckpoint(
         dirpath=config.weights_path,

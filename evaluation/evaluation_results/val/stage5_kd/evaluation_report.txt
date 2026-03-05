@@ -5,14 +5,14 @@ Split: val
 Data root: /home/lainey/Documents/Github/ClassImbalance/data/biodiversity_split/val
 Ignore index: 0
 
-Overall Accuracy (OA): 0.9426
-Mean IoU (excl. bg): 0.8329
-Mean F1 (excl. bg): 0.9074
+Overall Accuracy (OA): 0.9420
+Mean IoU (excl. bg): 0.8301
+Mean F1 (excl. bg): 0.9056
 
 Per-class IoU:
   Background: 0.0000
-  Forest land: 0.7671
-  Grassland: 0.9326
-  Cropland: 0.8840
-  Settlement: 0.7664
-  Seminatural Grassland: 0.8143
+  Forest land: 0.7641
+  Grassland: 0.9330
+  Cropland: 0.8885
+  Settlement: 0.7601
+  Seminatural Grassland: 0.8049

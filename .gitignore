@@ -5,6 +5,8 @@ data/
 pretrain_weights/
 model_weights/
 artifacts/
+bin/
+docs/
 
 # --------------------
 # Logs / outputs

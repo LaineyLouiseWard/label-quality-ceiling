@@ -79,18 +79,25 @@ train_dataset = OpenEarthMapTeacherTrainDataset(
     img_dir="images",
     mask_dir="masks",
     img_suffix=".tif",
-    mask_suffix=".tif",
+    mask_suffix=".png",
 )
-
-
 
 val_dataset = OpenEarthMapTeacherValDataset(
     data_root="data/openearthmap_teacher/val",
     img_dir="images",
     mask_dir="masks",
     img_suffix=".tif",
-    mask_suffix=".tif",
+    mask_suffix=".png",
 )
+
+# Sanity check: fail fast if teacher data is missing
+print(f"[unet_oem] train: {train_dataset.data_root} ({len(train_dataset)} samples)")
+print(f"[unet_oem] val:   {val_dataset.data_root} ({len(val_dataset)} samples)")
+if len(train_dataset) == 0:
+    raise RuntimeError(
+        f"Teacher train dataset is empty (data_root={train_dataset.data_root}).\n"
+        "  Run A8 (prepare_oem_teacher_data.py) first, or check the path."
+    )
 
 
 

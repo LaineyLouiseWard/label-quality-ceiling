@@ -87,11 +87,11 @@ def main() -> None:
         # 03: no script — manually produced vector diagram
         ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
         ("05", lambda: run_py(SCRIPTS_DIR / "Figure05.py", [], args.device)),
-        ("06", lambda: run_py(SCRIPTS_DIR / "Figure06.py", [], args.device)),
+        ("06", lambda: run_py_no_device(SCRIPTS_DIR / "Figure06.py")),
         ("07", lambda: run_nb(SCRIPTS_DIR / "Figure07.ipynb")),
         ("08", lambda: run_py(SCRIPTS_DIR / "Figure08.py", [], args.device)),
-        ("09", lambda: run_py(SCRIPTS_DIR / "Figure09.py", [], args.device)),
-        ("10", lambda: run_py(SCRIPTS_DIR / "Figure10.py", [], args.device)),
+        ("09", lambda: run_py_no_device(SCRIPTS_DIR / "Figure09.py")),
+        ("10", lambda: run_py_no_device(SCRIPTS_DIR / "Figure10.py")),
         ("11", lambda: run_py(SCRIPTS_DIR / "Figure11.py", [], args.device)),
     ]
 

@@ -79,7 +79,7 @@ STAGES: List[Tuple[str, str]] = [
     ("2", "stage2_replication"),
     ("3b", "stage3b_finetune"),
     ("4", "stage4_sampling"),
-    ("5", "stage5_kd/stage5_kd"),  # metrics nested under stage5_kd/stage5_kd/ on disk
+    ("5", "stage5_kd"),
 ]
 
 # -----------------------
@@ -184,7 +184,7 @@ def build_from_json() -> Dict[str, Dict[str, float]]:
             "Grassland":   ["grassland"],
             "Cropland":    ["cropland", "agricultural-land", "agriculture", "agri"],
             "Settlement":  ["settlement", "built-up", "builtup"],
-            "Semi-nat.":   ["semi-nat.", "semi-nat", "semi-natural", "semi-natural-grassland"],
+            "Semi-nat.":   ["semi-nat.", "semi-nat", "semi-natural", "semi-natural-grassland", "seminatural-grassland"],
         }
 
         out: Dict[str, float] = {}

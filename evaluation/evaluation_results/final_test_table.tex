@@ -1,14 +1,16 @@
 \begin{tabularx}{\textwidth}{
+    >{\raggedright\arraybackslash}p{2.4cm}
+    >{\centering\arraybackslash}p{1.3cm}
+    >{\centering\arraybackslash}p{1.3cm}
+    >{\centering\arraybackslash}p{1.3cm}
     >{\centering\arraybackslash}p{1.6cm}
     >{\centering\arraybackslash}p{1.6cm}
-    >{\centering\arraybackslash}p{1.6cm}
-    >{\centering\arraybackslash}p{1.8cm}
-    >{\centering\arraybackslash}p{2.0cm}
-    >{\centering\arraybackslash}p{1.2cm}
-    >{\centering\arraybackslash}p{1.2cm}
+    >{\centering\arraybackslash}p{1.0cm}
+    >{\centering\arraybackslash}p{1.0cm}
     >{\centering\arraybackslash}X
 }
 \toprule
+\begin{tabular}[c]{@{}c@{}} \textbf{Stage} \end{tabular} &
 \begin{tabular}[c]{@{}c@{}} \textbf{Forest} \\ (\%) \end{tabular} &
 \begin{tabular}[c]{@{}c@{}} \textbf{Grassland} \\ (\%) \end{tabular} &
 \begin{tabular}[c]{@{}c@{}} \textbf{Cropland} \\ (\%) \end{tabular} &
@@ -19,6 +21,7 @@
 \begin{tabular}[c]{@{}c@{}} \textbf{OA} \\ (\%) \end{tabular}
 \\
 \midrule
-74.0 & 89.1 & 76.0 & 70.6 & 63.6 & 74.6 & 85.2 & 90.6 \\
+Stage 1 (baseline) & 73.3 & 88.0 & 74.3 & 69.9 & 57.1 & 72.5 & 83.7 & 89.6 \\
+Stage 5 (KD) & 78.7 & 92.6 & 86.6 & 76.7 & 80.7 & 83.1 & 90.6 & 93.8 \\
 \bottomrule
 \end{tabularx}

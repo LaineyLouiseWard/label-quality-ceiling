@@ -21,13 +21,12 @@ REPO_ROOT = find_repo_root()
 # ── Canonical stage definitions ─────────────────────────────────────────────
 
 # Paper stages mapped to val evaluation-result folder paths.
-# Stage 5 in the paper = stage5_kd in the repo (double-nested on disk).
 STAGES = [
     ("1",  "stage1_baseline"),
     ("2",  "stage2_replication"),
     ("3b", "stage3b_finetune"),
     ("4",  "stage4_sampling"),
-    ("5",  "stage5_kd/stage5_kd"),
+    ("5",  "stage5_kd"),
 ]
 
 VAL_ROOT = REPO_ROOT / "evaluation" / "evaluation_results" / "val"

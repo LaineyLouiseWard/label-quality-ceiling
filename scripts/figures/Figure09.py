@@ -17,7 +17,7 @@ if str(repo_root) not in sys.path:
 
 CM_A = repo_root / "evaluation/evaluation_results/val/stage1_baseline/confusion_matrix.npy"
 CM_B = repo_root / "evaluation/evaluation_results/val/stage4_sampling/confusion_matrix.npy"
-CM_C = repo_root / "evaluation/evaluation_results/val/stage5_kd/stage5_kd/confusion_matrix.npy"
+CM_C = repo_root / "evaluation/evaluation_results/val/stage5_kd/confusion_matrix.npy"
 
 OUT_DIR = repo_root / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
