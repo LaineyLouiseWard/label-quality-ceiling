@@ -1,6 +1,12 @@
 # Addressing Severe Class Imbalance in Rural Image Segmentation
 
-Code for *Ward et al., Remote Sensing 2026* — a staged cumulative ablation applying
+![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![PyTorch 2.9](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
+![Lightning 2.3](https://img.shields.io/badge/Lightning-2.3-792EE5?logo=lightning&logoColor=white)
+![Rasterio](https://img.shields.io/badge/Rasterio-1.4-green)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
+
+Code for *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer* — a staged cumulative ablation applying
 minority replication, OEM pre-training, hard×minority sampling, and knowledge
 distillation to high-resolution Pléiades satellite imagery with FT-UNetFormer.
 
@@ -94,26 +100,27 @@ python scripts/figures/Figure11.py          # KD pixel transitions
 jupyter nbconvert --to notebook --execute scripts/figures/Figure02.ipynb
 ```
 
-See [FIGURE_MAP.md](FIGURE_MAP.md) for per-figure dependencies and required assets.
-Figure 3 is a manually produced vector diagram with no associated script.
+Figure 3 is compiled from `scripts/figures/Figure03.tex` (TikZ) to `figures/Figure03.pdf`.
 
 ---
 
 ## Supplementary analyses
 
 All derived from saved evaluation outputs and sampling artefacts — no retraining required.
-
-| File | Content |
-|------|---------|
-| [docs/robustness_analyses.md](docs/robustness_analyses.md) | All supplementary robustness analyses (A1–A6): minority recall, symmetric confusion, weight uplift, val–test gap, majority stability, Gini coefficient |
-| [docs/paper_code_consistency_audit_proposed.md](docs/paper_code_consistency_audit_proposed.md) | Paper–code audit; numerical claims verified against saved outputs |
+Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce
+robustness analyses A1–A6 (minority recall, symmetric confusion, weight uplift, val–test gap,
+majority stability, Gini coefficient).
 
 ---
 
-## Data & checkpoint availability
+## Data availability
 
-The Biodiversity dataset is not publicly redistributable (ODOS Technologies licence).
-Pre-trained checkpoints are not redistributed.
+The Biodiversity dataset used in this study is proprietary and not publicly
+available. It was acquired under licence from ODOS Technologies and cannot be
+redistributed. The OpenEarthMap dataset is publicly available at
+[https://open-earth-map.org](https://open-earth-map.org).
+
+Pre-trained model checkpoints are not redistributed.
 
 Users with licensed access should place files as follows:
 
@@ -133,9 +140,21 @@ Users with licensed access should place files as follows:
 
 ## Manuscript reproducibility
 
-- `main_proposed.tex` is the current submission-ready manuscript with A1–A6 robustness insertions applied.
-- `docs/robustness_analyses.md` contains the structured A1–A6 analyses (authoritative source for all inserted values).
-- `docs/paper_code_consistency_audit_proposed.md` verifies all 123 numerical claims in `main_proposed.tex` against saved artefacts.
-- `docs/analysis_index.md` maps every reported metric to its source artefact on disk.
 - Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce A1–A6 from saved evaluation outputs and sampling artefacts — no retraining required.
 - Data preparation scripts (split, filter, relabel, combine, replicate, build weights, export checkpoint) are in `scripts/data_prep/`.
+
+---
+
+## Citation
+
+If you use this code, please cite:
+
+```bibtex
+@article{Ward2026,
+  title   = {Addressing Severe Class Imbalance in Rural Image Segmentation
+             through Data Curation and Cross-Dataset Knowledge Transfer},
+  author  = {Ward, Lainey and others},
+  journal = {Remote Sensing},
+  year    = {2026}
+}
+```

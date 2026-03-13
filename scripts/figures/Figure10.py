@@ -2,20 +2,22 @@
 """
 scripts/figures/Figure10.py
 
-Plot per-class IoU vs ablation stage (Figure-ready).
+Plot per-class IoU vs ablation stage with 95% bootstrap confidence bands.
 
 Default behaviour:
   - Reads per-stage metrics.json under:
       evaluation/evaluation_results/val/<stage_folder>/metrics.json
+  - Reads bootstrap CIs from:
+      analysis/bootstrap_results.json
   - Extracts per-class IoU for the 5 foreground classes (no Background).
-  - Produces a single line plot (5 lines).
+  - Produces a single line plot (5 lines) with shaded 95% CI bands.
 
-Fallback:
-  - If metrics.json are missing or incompatible, uses Table 2 values embedded below.
+Dependencies:
+  - Run `python scripts/analysis/bootstrap_metrics.py` first to generate
+    analysis/bootstrap_results.json with CIs for all stages.
 
 Outputs:
   figures/Figure10.pdf
-  figures/Figure10.png
 """
 
 from __future__ import annotations
@@ -46,11 +48,11 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 VAL_DIR = repo_root / "evaluation" / "evaluation_results" / "val"
+BOOTSTRAP_JSON = repo_root / "analysis" / "bootstrap_results.json"
 OUT_DIR = repo_root / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 OUT_PDF = OUT_DIR / "Figure10.pdf"
-OUT_PNG = OUT_DIR / "Figure10.png"
 
 print("Repo root:", repo_root)
 print("Val metrics dir:", VAL_DIR)
@@ -165,6 +167,46 @@ def normalise_keys(d: Dict[str, float]) -> Dict[str, float]:
     return {norm(k): float(v) for k, v in d.items()}
 
 
+# Bootstrap class-name mapping (bootstrap uses short names)
+BOOTSTRAP_CLASS_MAP = {
+    "Forest": "Forest land",
+    "Grassland": "Grassland",
+    "Cropland": "Cropland",
+    "Settlement": "Settlement",
+    "Seminatural": "Semi-nat.",
+}
+
+
+def load_bootstrap_cis(split: str = "val") -> Dict[str, Dict[str, Tuple[float, float]]]:
+    """Load per-class IoU 95% CIs from bootstrap_results.json.
+
+    Returns:
+        stage_label -> {class_name -> (lo_pct, hi_pct)}
+    """
+    with open(BOOTSTRAP_JSON, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    stage_to_ci: Dict[str, Dict[str, Tuple[float, float]]] = {}
+    for stage_label, folder in STAGES:
+        key = f"{folder}/{split}"
+        if key not in data:
+            raise KeyError(
+                f"Bootstrap results missing for '{key}'. "
+                f"Run: python scripts/analysis/bootstrap_metrics.py"
+            )
+        per_class = data[key]["ci_95"]["per_class_iou"]
+        mapped: Dict[str, Tuple[float, float]] = {}
+        for boot_name, plot_name in BOOTSTRAP_CLASS_MAP.items():
+            lo, hi = per_class[boot_name]
+            # Convert to percent if values are fractions
+            if hi <= 1.0:
+                lo, hi = lo * 100, hi * 100
+            mapped[plot_name] = (lo, hi)
+        stage_to_ci[stage_label] = mapped
+
+    return stage_to_ci
+
+
 def build_from_json() -> Dict[str, Dict[str, float]]:
     """
     Returns:
@@ -207,7 +249,10 @@ def build_from_json() -> Dict[str, Dict[str, float]]:
 
 
 
-def plot_iou_trends(stage_to_iou: Dict[str, Dict[str, float]]) -> None:
+def plot_iou_trends(
+    stage_to_iou: Dict[str, Dict[str, float]],
+    stage_to_ci: Dict[str, Dict[str, Tuple[float, float]]],
+) -> None:
     stage_labels = [s for s, _ in STAGES if s in stage_to_iou]
     x = list(range(len(stage_labels)))
 
@@ -222,9 +267,12 @@ def plot_iou_trends(stage_to_iou: Dict[str, Dict[str, float]]) -> None:
             linewidth=2.0,
             markersize=5,
             label=cls,
-            color=CLASS_COLORS[cls],     # <-- exact palette mapping
+            color=CLASS_COLORS[cls],
             linestyle=LINESTYLE[cls],
         )
+        y_lo = [stage_to_ci[s][cls][0] for s in stage_labels]
+        y_hi = [stage_to_ci[s][cls][1] for s in stage_labels]
+        ax.fill_between(x, y_lo, y_hi, color=CLASS_COLORS[cls], alpha=0.15)
 
     ax.set_xticks(x)
     ax.set_xticklabels(stage_labels)
@@ -254,10 +302,8 @@ def plot_iou_trends(stage_to_iou: Dict[str, Dict[str, float]]) -> None:
 
     fig.tight_layout()
     fig.savefig(OUT_PDF, bbox_inches="tight", pad_inches=0.02, dpi=300)
-    fig.savefig(OUT_PNG, bbox_inches="tight", pad_inches=0.02, dpi=300)
     plt.close(fig)
     print("Saved:", OUT_PDF)
-    print("Saved:", OUT_PNG)
 
 
 # -----------------------
@@ -266,4 +312,6 @@ def plot_iou_trends(stage_to_iou: Dict[str, Dict[str, float]]) -> None:
 if __name__ == "__main__":
     stage_to_iou = build_from_json()
     print("Loaded IoU from metrics.json.")
-    plot_iou_trends(stage_to_iou)
+    stage_to_ci = load_bootstrap_cis(split="val")
+    print("Loaded bootstrap CIs from", BOOTSTRAP_JSON.name)
+    plot_iou_trends(stage_to_iou, stage_to_ci)

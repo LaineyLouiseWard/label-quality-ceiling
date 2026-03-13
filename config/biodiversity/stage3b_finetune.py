@@ -1,16 +1,16 @@
 """
-Stage 3b: Finetune on Biodiversity (train_rep) after Stage 3 OEM pretraining.
+Stage 3b: Finetune on Biodiversity (train_rep) after Stage 3a OEM pretraining.
 
 Fair ablation rule:
 - Keep EVERYTHING identical to Stage 2 replication training (data aug/loss/optim/sched),
-  except the initialisation checkpoint (comes from Stage 3 OEM pretrain).
+  except the initialisation checkpoint (comes from Stage 3a OEM pretrain).
 - NO minority-aware cropping here.
 - NO weighted sampling here. (That is Stage 4.)
 
 Target: Biodiversity only
 Cumulative ON:
 - replication (train_rep)
-- OEM pretraining initialisation (from Stage 3)
+- OEM pretraining initialisation (from Stage 3a)
 
 Run with:
   PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3b_finetune.py
@@ -66,7 +66,7 @@ save_top_k = 1
 save_last = False
 check_val_every_n_epoch = 1
 
-# IMPORTANT: initialise from Stage 3 OEM pretrain
+# IMPORTANT: initialise from Stage 3a OEM pretrain
 pretrained_ckpt_path = (
     "model_weights/biodiversity/"
     "stage3a_pretrain/"

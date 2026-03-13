@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate per-sample difficulty weights for Stage 3 difficulty-weighted sampling.
+Generate per-sample difficulty weights for Stage 4 hard x minority sampling.
 
-Improvement:
-- Difficulty is computed primarily on minority pixels (e.g., settlement+seminatural),
-  not global CE dominated by majority classes.
+Difficulty is computed primarily on minority pixels (settlement + seminatural),
+not global CE dominated by majority classes.
 """
 
 from __future__ import annotations

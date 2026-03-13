@@ -20,7 +20,9 @@ REPO_ROOT = find_repo_root()
 
 # ── Canonical stage definitions ─────────────────────────────────────────────
 
-# Paper stages mapped to val evaluation-result folder paths.
+# Paper ablation stages mapped to val evaluation-result folder paths.
+# Stage 3a (OEM pretrain) is omitted: it trains on OEM, not biodiversity,
+# so only Stage 3b (finetune) is reported in the ablation table.
 STAGES = [
     ("1",  "stage1_baseline"),
     ("2",  "stage2_replication"),

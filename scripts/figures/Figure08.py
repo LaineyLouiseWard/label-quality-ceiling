@@ -34,7 +34,7 @@ if str(repo_root) not in sys.path:
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
+from matplotlib.patches import Patch, Rectangle
 from matplotlib.gridspec import GridSpec
 
 from geoseg.datasets.biodiversity_dataset import (
@@ -79,6 +79,36 @@ PALETTE: Dict[int, Tuple[int, int, int]] = {i: tuple(rgb) for i, rgb in enumerat
 # Albumentations Normalize() defaults (used by dataset)
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+
+# -----------------------------------------------------------------------------
+# Highlight annotations drawn on specific (column, row) panels
+# -----------------------------------------------------------------------------
+# Each entry: col index (0-based), row keys to annotate, rect (x, y, w, h)
+# in 512×512 pixel coords, edge colour, and linewidth.
+HIGHLIGHT_ANNOTATIONS = [
+    {  # H1: Compact settlement cluster — tile (b)
+        "col": 1,
+        "rows": {"gt", "s4"},
+        "rect": (100, 40, 300, 260),
+        "color": "#00FFFF",   # cyan
+        "lw": 3.0,
+    },
+    {  # H2: Large semi-natural region — tile (d)
+        "col": 3,
+        "rows": {"gt", "s1", "s4"},
+        "rect": (140, 40, 320, 340),
+        "color": "#FF00FF",   # magenta
+        "lw": 3.0,
+    },
+    {  # H3: Thin linear road/settlement features — tile (c)
+        "col": 2,
+        "rows": {"gt", "s5"},
+        "rect": (20, 120, 380, 200),
+        "color": "#FFFFFF",   # white
+        "lw": 3.0,
+    },
+]
 
 
 # -----------------------------------------------------------------------------
@@ -207,6 +237,7 @@ def make_grid_figure(
     col_titles: List[str],
     row_labels: List[str],
     legend_handles: List[Patch],
+    annotations: List[Dict] | None = None,
 ) -> plt.Figure:
     n_cols = len(columns)
     n_rows = len(row_labels)
@@ -235,6 +266,8 @@ def make_grid_figure(
             fontsize=row_fs, fontweight="bold",
         )
 
+    anns = annotations if annotations else []
+
     keys = ["img", "gt", "s1", "s2", "s3a", "s3b", "s4", "s5"]
     for c in range(n_cols):
         col = columns[c]
@@ -245,6 +278,16 @@ def make_grid_figure(
             ax.axis("off")
             if r == 0:
                 ax.set_title(col_titles[c], fontsize=col_fs, pad=10, fontweight="bold")
+            # Draw highlight rectangles
+            for ann in anns:
+                if ann["col"] == c and k in ann["rows"]:
+                    x, y, w, h = ann["rect"]
+                    ax.add_patch(Rectangle(
+                        (x, y), w, h,
+                        linewidth=ann["lw"],
+                        edgecolor=ann["color"],
+                        facecolor="none",
+                    ))
 
     legend_ax = fig.add_subplot(gs[n_rows, :])
     legend_ax.axis("off")
@@ -354,7 +397,8 @@ def main() -> None:
 
     handles = make_legend_handles(include_background=True)
 
-    fig = make_grid_figure(columns, col_titles, row_labels, handles)
+    fig = make_grid_figure(columns, col_titles, row_labels, handles,
+                           annotations=HIGHLIGHT_ANNOTATIONS)
 
     out = (repo_root / args.out_path).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)

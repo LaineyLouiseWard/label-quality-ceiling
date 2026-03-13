@@ -33,6 +33,11 @@ __pycache__/
 *.egg-info/
 
 # --------------------
+# Manuscript
+# --------------------
+main_proposed.tex
+
+# --------------------
 # Claude Code
 # --------------------
 CLAUDE.md

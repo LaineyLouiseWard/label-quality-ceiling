@@ -1,4 +1,11 @@
-# Figure05.py — hard × minority sampling schematic (Stage 4)
+"""Fig 5: Hard x minority sampling weight distribution (Stage 4).
+
+Writes:
+  figures/Figure05.pdf
+
+Run:
+  python scripts/figures/Figure05.py
+"""
 
 import sys
 from pathlib import Path

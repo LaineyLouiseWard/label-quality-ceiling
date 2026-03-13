@@ -13,7 +13,6 @@ Reported as percentages of GT pixels of that class.
 
 Outputs:
   figures/Figure11.pdf
-  figures/Figure11.png
 
 Notes:
   - Uses BiodiversityValDataset / BiodiversityTestWithMasksDataset (same as Figure08.py).
@@ -245,7 +244,6 @@ def plot_fix_break_bars(
     fix_pct: Dict[str, float],
     break_pct: Dict[str, float],
     out_pdf: Path,
-    out_png: Path,
     title: str,
 ) -> None:
     labels = FOREGROUND_LABELS
@@ -284,6 +282,16 @@ def plot_fix_break_bars(
         label="KD introduces new errors",
     )
 
+    # Net improvement annotations above each class pair
+    for i, l in enumerate(labels):
+        net = fix_pct[l] - break_pct[l]
+        bar_top = max(fixes[i], breaks[i])
+        sign = "+" if net >= 0 else ""
+        ax.text(
+            x[i], bar_top + 0.6, f"{sign}{net:.1f} pp",
+            ha="center", va="bottom", fontsize=11, fontweight="bold",
+        )
+
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
 
@@ -299,11 +307,9 @@ def plot_fix_break_bars(
 
     fig.tight_layout()
     fig.savefig(out_pdf, bbox_inches="tight", pad_inches=0.02, dpi=300)
-    fig.savefig(out_png, bbox_inches="tight", pad_inches=0.02, dpi=300)
     plt.close(fig)
 
     print("Saved:", out_pdf)
-    print("Saved:", out_png)
 
 
 # -----------------------------------------------------------------------------
@@ -320,7 +326,6 @@ def main() -> None:
     ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_kd")  # paper Stage 5
 
     ap.add_argument("--out-pdf", default="figures/Figure11.pdf")
-    ap.add_argument("--out-png", default="figures/Figure11.png")
 
     args = ap.parse_args()
 
@@ -355,12 +360,10 @@ def main() -> None:
         print(f"  {cls:12s}: {gt_counts[cls]}")
 
     out_pdf = (rr / args.out_pdf).resolve()
-    out_png = (rr / args.out_png).resolve()
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
-    out_png.parent.mkdir(parents=True, exist_ok=True)
 
     #title = f"Baseline → KD pixel transitions per class ({args.split} split)"
-    plot_fix_break_bars(fix_pct, break_pct, out_pdf, out_png, title=None)
+    plot_fix_break_bars(fix_pct, break_pct, out_pdf, title=None)
 
 
 if __name__ == "__main__":

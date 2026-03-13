@@ -1,0 +1,226 @@
+% Graphical Abstract — TikZ
+%
+% Compile & convert (run from repo root):
+%   pdflatex --shell-escape -output-directory=figures/graphical_abstract \
+%       scripts/figures/graphical_abstract_tikz.tex
+%   pdftoppm -png -r 300 -singlefile \
+%       figures/graphical_abstract/graphical_abstract_tikz.pdf \
+%       figures/graphical_abstract/Graphical_Abstract
+%   rm -f figures/graphical_abstract/graphical_abstract_tikz.{aux,log,pdf}
+%
+% Output: figures/graphical_abstract/Graphical_Abstract.png
+% MDPI minimum: 1100 × 560 px (width × height).
+% No title per MDPI guidelines.
+
+\documentclass[tikz,border=3mm]{standalone}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, calc}
+\usepackage[T1]{fontenc}
+
+% ── Class colours (biodiversity_dataset.py palette) ────────────────────
+\definecolor{clsForest}{HTML}{FA3E77}
+\definecolor{clsGrassland}{HTML}{A8E854}
+\definecolor{clsCropland}{HTML}{F2B45C}
+\definecolor{clsSettlement}{HTML}{3B8DF7}
+\definecolor{clsSeminatural}{HTML}{FFD621}
+\definecolor{accentGreen}{HTML}{2E7D32}
+\definecolor{lightResultBg}{HTML}{F1F8F1}
+\definecolor{darkGrey}{HTML}{555555}
+\definecolor{tileLabel}{HTML}{333333}
+\definecolor{connDark}{HTML}{666666}
+
+\graphicspath{{figures/graphical_abstract/}}
+
+\begin{document}
+\begin{tikzpicture}[
+    every node/.style={inner sep=0pt, outer sep=0pt},
+    tlabel/.style={font=\small\bfseries, text=tileLabel, anchor=south, yshift=3pt},
+    arr/.style={-{Stealth[length=2.2mm, width=1.6mm]}, line width=0.7pt, color=darkGrey},
+    garr/.style={-{Stealth[length=3mm, width=2mm]}, line width=1.0pt, color=accentGreen},
+    conn/.style={-{Stealth[length=2mm, width=1.4mm]}, line width=0.6pt, color=connDark},
+    connline/.style={line width=0.6pt, color=connDark},
+  ]
+
+  % ════════════════════════════════════════════════════════════════════
+  % TILE ROW — main visual story, evenly spaced
+  % ════════════════════════════════════════════════════════════════════
+  \def\tw{3.6cm}       % tile width
+  \def\tgap{0.65}      % gap between tiles (cm)
+  \def\trow{4.0}       % y-centre of tile row
+
+  \node[inner sep=0pt] (rgb) at (0, \trow)
+    {\includegraphics[width=\tw]{biodiversity_1310_rgb.png}};
+  \node[tlabel] at (rgb.north) {Satellite};
+
+  \node[inner sep=0pt, right=\tgap cm of rgb] (gt)
+    {\includegraphics[width=\tw]{biodiversity_1310_gt.png}};
+  \node[tlabel] at (gt.north) {Ground Truth};
+
+  \node[inner sep=0pt, right=\tgap cm of gt] (s1)
+    {\includegraphics[width=\tw]{biodiversity_1310_stage1_baseline.png}};
+  \node[tlabel] at (s1.north) {Baseline (Stage~1)};
+
+  \node[inner sep=0pt, right=\tgap cm of s1] (s5)
+    {\includegraphics[width=\tw]{biodiversity_1310_stage6_kd.png}};
+  \node[tlabel] at (s5.north) {Final (Stage~5)};
+
+  % ── Arrows between tiles (dark grey) ────────────────────────────────
+  \draw[arr]  ([xshift=1.5mm] rgb.east) -- ([xshift=-1.5mm] gt.west);
+  \draw[arr]  ([xshift=1.5mm] gt.east)  -- ([xshift=-1.5mm] s1.west);
+  \draw[garr] ([xshift=1.5mm] s1.east)  -- ([xshift=-1.5mm] s5.west);
+
+  % ════════════════════════════════════════════════════════════════════
+  % RIGHT PANEL — legend + key result
+  % ════════════════════════════════════════════════════════════════════
+
+  % "Classes" title aligned with tile titles (same yshift as tlabel)
+  \coordinate (panelTL) at ([xshift=10mm] s5.north east);
+  \node[font=\small\bfseries, text=tileLabel, anchor=south west, yshift=3pt]
+    (legTitle) at (panelTL) {Classes};
+
+  % Legend entries vertically centred within the tile image height.
+  % Tile height = 3.6cm.  5 entries: total block = 4*0.58 + 0.36 = 2.68cm.
+  % Top offset = (3.6 - 2.68)/2 = 0.46cm below tile top.
+  \def\lspc{0.58}
+  \foreach \name/\col/\idx in {
+    Forest/clsForest/0,
+    Grassland/clsGrassland/1,
+    Cropland/clsCropland/2,
+    Settlement/clsSettlement/3,
+    Semi-natural/clsSeminatural/4%
+  } {
+    % y offset from tile top edge (s5.north east y)
+    \pgfmathsetmacro{\ly}{-0.46 - \idx * \lspc}
+    \fill[\col]
+      ([yshift=\ly cm, xshift=10mm] s5.north east) rectangle ++(0.38, -0.36);
+    \draw[thin, gray!40]
+      ([yshift=\ly cm, xshift=10mm] s5.north east) rectangle ++(0.38, -0.36);
+    \node[font=\small, text=tileLabel, anchor=west]
+      at ([yshift={\ly cm - 0.18cm}, xshift={10mm + 0.54cm}] s5.north east)
+      {\name};
+  }
+
+  % -- Key result box: bottom-aligned with stage pipeline boxes --
+  % (placed after pipeline so we can reference stage5.south)
+  % Placeholder — actual node drawn after pipeline section below.
+
+  % ════════════════════════════════════════════════════════════════════
+  % PIPELINE STRIP — spans full image row width
+  % ════════════════════════════════════════════════════════════════════
+  % Left boundary  = rgb.south west
+  % Right boundary = s5.south east
+  % Compute available width dynamically, then derive box width from it.
+
+  \def\bh{0.95}       % box height (cm) — accommodates 3-line text
+  \def\bgap{0.35}     % gap between boxes (cm)
+
+  % Compute total available width from image row
+  \path let \p1=(rgb.south west), \p2=(s5.south east) in [/utils/exec={
+    \pgfmathsetmacro{\pipeWtotal}{(\x2 - \x1) / 1cm}
+    \global\let\pipeWtotal\pipeWtotal
+  }];
+
+  % Box widths: proportional weights (S1 narrow, S3/S4 wider)
+  % Weights: 0.75 + 0.95 + 1.15 + 1.15 + 1.00 = 5.00
+  \pgfmathsetmacro{\boxPool}{\pipeWtotal - 4*\bgap}
+  \pgfmathsetmacro{\bwA}{\boxPool * 0.75 / 5}   % Stage 1: Baseline
+  \pgfmathsetmacro{\bwB}{\boxPool * 0.95 / 5}   % Stage 2: Minority replication
+  \pgfmathsetmacro{\bwC}{\boxPool * 1.15 / 5}   % Stage 3: OEM pre-train & fine-tune
+  \pgfmathsetmacro{\bwD}{\boxPool * 1.15 / 5}   % Stage 4: Hard × minority sampling
+  \pgfmathsetmacro{\bwE}{\boxPool * 1.00 / 5}   % Stage 5: Knowledge distillation
+
+  % Pipeline y-position: anchored to rgb.south west (absolute left edge)
+  \def\pipeDrop{1.8}  % cm below tileMid
+  \path (rgb.south west) -- (s5.south east) coordinate[midway] (tileMid);
+
+  % Cumulative x positions (left edge of each box, relative to rgb.south west)
+  \pgfmathsetmacro{\xA}{0}
+  \pgfmathsetmacro{\xB}{\xA + \bwA + \bgap}
+  \pgfmathsetmacro{\xC}{\xB + \bwB + \bgap}
+  \pgfmathsetmacro{\xD}{\xC + \bwC + \bgap}
+  \pgfmathsetmacro{\xE}{\xD + \bwD + \bgap}
+
+  % Stage box style: anchor=west so left edge is placed exactly at cumulative x.
+  % minimum width forces box to fill allocated span; text width constrains wrapping.
+  % inner xsep=2pt provides small text padding inside the fixed-width box.
+  % Stage 1
+  \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
+    fill=gray!4, minimum width={\bwA cm}, text width={\bwA cm - 4pt},
+    inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
+    font=\scriptsize, text=tileLabel, align=center, anchor=west,
+  ] (stage1) at ([xshift={\xA cm}, yshift=-\pipeDrop cm] rgb.south west) {
+    {\bfseries Stage~1}\\[-1pt] Baseline
+  };
+  % Stage 2
+  \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
+    fill=gray!4, minimum width={\bwB cm}, text width={\bwB cm - 4pt},
+    inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
+    font=\scriptsize, text=tileLabel, align=center, anchor=west,
+  ] (stage2) at ([xshift={\xB cm}, yshift=-\pipeDrop cm] rgb.south west) {
+    {\bfseries Stage~2}\\[-1pt] Minority\\[-1pt] replication
+  };
+  % Stage 3
+  \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
+    fill=gray!4, minimum width={\bwC cm}, text width={\bwC cm - 4pt},
+    inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
+    font=\scriptsize, text=tileLabel, align=center, anchor=west,
+  ] (stage3) at ([xshift={\xC cm}, yshift=-\pipeDrop cm] rgb.south west) {
+    {\bfseries Stage~3}\\[-1pt] OEM pre-train\\[-1pt] \& fine-tune
+  };
+  % Stage 4
+  \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
+    fill=gray!4, minimum width={\bwD cm}, text width={\bwD cm - 4pt},
+    inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
+    font=\scriptsize, text=tileLabel, align=center, anchor=west,
+  ] (stage4) at ([xshift={\xD cm}, yshift=-\pipeDrop cm] rgb.south west) {
+    {\bfseries Stage~4}\\[-1pt] Hard $\times$ minority\\[-1pt] sampling
+  };
+  % Stage 5
+  \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
+    fill=gray!4, minimum width={\bwE cm}, text width={\bwE cm - 4pt},
+    inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
+    font=\scriptsize, text=tileLabel, align=center, anchor=west,
+  ] (stage5) at ([xshift={\xE cm}, yshift=-\pipeDrop cm] rgb.south west) {
+    {\bfseries Stage~5}\\[-1pt] Knowledge\\[-1pt] distillation
+  };
+
+  % Arrows between pipeline stages (dark grey)
+  \foreach \a/\b in {1/2, 2/3, 3/4, 4/5} {
+    \draw[arr] (stage\a.east) -- (stage\b.west);
+  }
+
+  % ── Orthogonal connectors (dark grey): stage box → tile image ──────
+  % Waypoint y: midway between stage top and tile bottom
+  \path (stage1.north) -- (s1.south) coordinate[midway] (connWayY);
+
+  % Stage 1 → Baseline tile
+  \draw[connline]
+    (stage1.north) -- (stage1.north |- connWayY)
+    -- (s1.south |- connWayY);
+  \draw[conn]
+    (s1.south |- connWayY) -- ([yshift=-0.5mm] s1.south);
+
+  % Stage 5 → Final tile
+  \draw[connline]
+    (stage5.north) -- (stage5.north |- connWayY)
+    -- (s5.south |- connWayY);
+  \draw[conn]
+    (s5.south |- connWayY) -- ([yshift=-0.5mm] s5.south);
+
+  % ── Key result box: bottom aligned with stage pipeline boxes ────────
+  \node[
+    draw=accentGreen, line width=0.7pt, rounded corners=3pt,
+    fill=lightResultBg, inner sep=6pt,
+    font=\small, text=tileLabel, align=center,
+    anchor=south west,
+  ] (result) at ([xshift=10mm] s5.south east |- stage5.south) {
+    \textbf{\textcolor{accentGreen}{Key Result}}\\[4pt]
+    mIoU\enspace 73\% \,$\rightarrow$\, \textbf{83\%}\\[2pt]
+    {\scriptsize Settlement\enspace 68\%\,$\rightarrow$\,76\%}\\[0pt]
+    {\scriptsize Semi-natural\enspace 57\%\,$\rightarrow$\,81\%}
+  };
+
+\end{tikzpicture}
+\end{document}

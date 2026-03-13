@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Supervised (non-KD) training script for Stages 1–5.
+Supervised training script for Stages 1–4.
 
 Updated: supports models that return either:
   - fine_logits (Tensor) OR

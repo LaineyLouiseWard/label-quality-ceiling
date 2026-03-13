@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 """
-Combined Biodiversity + OpenEarthMap (OEM) dataset for Stage 3 OEM pretraining.
+Combined Biodiversity + OpenEarthMap (OEM) dataset for Stage 3a OEM pretraining.
 
 IMPORTANT:
 - This file defines DATASETS ONLY.
@@ -109,7 +109,7 @@ class _OEMSegDataset(Dataset):
 
 class BiodiversityOEMTrainDataset(_OEMSegDataset):
     """
-    Training split for Stage 3 OEM pretraining.
+    Training split for Stage 3a OEM pretraining.
     Uses standard random crop + flip augmentation.
     """
     def __init__(self, data_root: str, transform=None):

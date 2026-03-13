@@ -3,7 +3,7 @@
 Build Stage 4 sampling weights for Biodiversity train_rep.
 
 Outputs:
-  artifacts/stage4_weights.tsv
+  artifacts/stage4_sampling_weights.tsv
 
 Each line:
   <img_id>\t<weight>

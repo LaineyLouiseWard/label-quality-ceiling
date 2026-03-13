@@ -1,3 +1,12 @@
+"""Fig 9: Confusion matrices for Stages 1, 4, and 5.
+
+Writes:
+  figures/Figure09.pdf
+
+Run:
+  python scripts/figures/Figure09.py
+"""
+
 import sys
 from pathlib import Path
 import numpy as np

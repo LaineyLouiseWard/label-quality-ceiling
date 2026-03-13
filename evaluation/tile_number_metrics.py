@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluation/tile_number_metrics.py
-
-Counts dataset tile totals for the *current ClassImbalance data tree*.
+Counts dataset tile totals for the current data tree.
 
 Raw OpenEarthMap layout (your download):
 data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/<region>/{images,labels}/*.tif

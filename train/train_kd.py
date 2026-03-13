@@ -1,5 +1,5 @@
 """
-Knowledge Distillation (KD) training script.
+Knowledge Distillation (KD) training script (Stage 5).
 
 Trains a student segmentation model using:
 - Ground-truth labels

@@ -1,5 +1,5 @@
 """
-Stage 3: OEM pretraining on combined dataset (Biodiversity + OEM, harmonised to 6 classes).
+Stage 3a: OEM pretraining on combined dataset (Biodiversity + OEM, harmonised to 6 classes).
 
 Fair ablation rule (for the paper):
 - Use the SAME core training hyperparams as Stage 1 (lr/backbone_lr/weight_decay/etc.)
@@ -60,7 +60,7 @@ save_top_k = 1
 save_last = False
 check_val_every_n_epoch = 1
 
-# Stage 3 starts from scratch
+# Stage 3a starts from scratch
 pretrained_ckpt_path = None
 resume_ckpt_path = None
 gpus = "auto"

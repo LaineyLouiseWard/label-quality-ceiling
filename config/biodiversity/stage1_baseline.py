@@ -1,6 +1,6 @@
 """
 Stage 1 (baseline): supervised training on biodiversity_split with random crops/augs.
-Saves Lightning checkpoints under weights_path, monitored by val_F1.
+Saves Lightning checkpoints under weights_path, monitored by val_mIoU.
 """
 
 from torch.utils.data import DataLoader
