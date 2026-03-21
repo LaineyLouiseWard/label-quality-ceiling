@@ -92,21 +92,21 @@ HIGHLIGHT_ANNOTATIONS = [
         "rows": {"gt", "s4"},
         "rect": (100, 40, 300, 260),
         "color": "#00FFFF",   # cyan
-        "lw": 3.0,
+        "lw": 6.0,
     },
     {  # H2: Large semi-natural region — tile (d)
         "col": 3,
         "rows": {"gt", "s1", "s4"},
         "rect": (140, 40, 320, 340),
-        "color": "#FF00FF",   # magenta
-        "lw": 3.0,
+        "color": "#7B2FBE",   # purple
+        "lw": 6.0,
     },
     {  # H3: Thin linear road/settlement features — tile (c)
         "col": 2,
         "rows": {"gt", "s5"},
         "rect": (20, 120, 380, 200),
         "color": "#FFFFFF",   # white
-        "lw": 3.0,
+        "lw": 6.0,
     },
 ]
 

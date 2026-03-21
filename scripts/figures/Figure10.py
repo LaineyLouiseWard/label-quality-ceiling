@@ -284,7 +284,7 @@ def plot_iou_trends(
     ax.xaxis.grid(False)
 
     # Y limits (since 3a removed)
-    ax.set_ylim(55, 100)
+    ax.set_ylim(40, 100)
 
     # Legend: multi-column (avoid single stacked column)
     ax.legend(
