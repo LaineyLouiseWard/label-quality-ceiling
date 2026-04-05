@@ -1,7 +1,7 @@
 # Reproducibility Runbook
 
-From-scratch instructions for reproducing all results in
-*Ward et al., Remote Sensing 2026*.
+From-scratch instructions for reproducing all results in the manuscript
+*Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer*.
 
 All commands assume you are in the repository root with the
 `ClassImbalance` conda environment activated.

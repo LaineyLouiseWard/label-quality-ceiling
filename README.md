@@ -6,7 +6,7 @@
 ![Rasterio](https://img.shields.io/badge/Rasterio-1.4-green)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
-Code for *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer* — a staged cumulative ablation applying
+Code accompanying the manuscript *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer* — a staged cumulative ablation applying
 minority replication, OEM pre-training, hard×minority sampling, and knowledge
 distillation to high-resolution Pléiades satellite imagery with FT-UNetFormer.
 
@@ -147,14 +147,4 @@ Users with licensed access should place files as follows:
 
 ## Citation
 
-If you use this code, please cite:
-
-```bibtex
-@article{Ward2026,
-  title   = {Addressing Severe Class Imbalance in Rural Image Segmentation
-             through Data Curation and Cross-Dataset Knowledge Transfer},
-  author  = {Ward, Lainey and others},
-  journal = {Remote Sensing},
-  year    = {2026}
-}
-```
+Citation details will be added upon publication.

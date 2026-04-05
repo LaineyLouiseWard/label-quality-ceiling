@@ -4,7 +4,7 @@ unset CUDA_VISIBLE_DEVICES
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 
 # ====================================================================
-# Full reproducibility pipeline (Ward et al., Remote Sensing 2026)
+# Full reproducibility pipeline
 #
 # Usage:
 #   bash RUNBOOK.sh              # run everything from A1
