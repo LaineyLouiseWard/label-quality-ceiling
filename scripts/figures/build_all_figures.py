@@ -7,16 +7,18 @@ Single entry point to reproduce all manuscript figures.
 Usage:
   python scripts/figures/build_all_figures.py [--device cuda|cpu] [--skip <figN> ...]
 
-Figures that require model checkpoints (05, 08, 11) will fail loudly if
-checkpoints are missing; all others depend only on data or saved artifacts.
-Figure 03 has no script (manually produced vector diagram).
+Figure types:
+  - Figures 01-02 are TikZ (.tex), compiled with pdflatex and copied to figures/.
+  - Figures 03-11 are Python scripts that write directly to figures/.
 
-Notebooks (Figure02, Figure07) are executed via jupyter nbconvert.
+Figures that require model checkpoints (03, 06, 08, 11) will fail loudly if
+checkpoints are missing; all others depend only on data or saved artifacts.
 """
 
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +26,7 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent.parent
+FIGURES_DIR = REPO_ROOT / "figures"
 
 
 def run_py(script: Path, extra_args: list[str], device: str) -> bool:
@@ -31,11 +34,8 @@ def run_py(script: Path, extra_args: list[str], device: str) -> bool:
         print(f"\nERROR: script not found: {script}")
         return False
     cmd = [sys.executable, str(script), f"--device={device}", *extra_args]
-    print(f"\n{'='*60}")
-    print(f"Running: {script.name}")
-    print(f"{'='*60}")
-    result = subprocess.run(cmd, cwd=str(REPO_ROOT))
-    return result.returncode == 0
+    print(f"\n{'='*60}\nRunning: {script.name}\n{'='*60}")
+    return subprocess.run(cmd, cwd=str(REPO_ROOT)).returncode == 0
 
 
 def run_py_no_device(script: Path) -> bool:
@@ -44,29 +44,27 @@ def run_py_no_device(script: Path) -> bool:
         print(f"\nERROR: script not found: {script}")
         return False
     cmd = [sys.executable, str(script)]
-    print(f"\n{'='*60}")
-    print(f"Running: {script.name}")
-    print(f"{'='*60}")
-    result = subprocess.run(cmd, cwd=str(REPO_ROOT))
-    return result.returncode == 0
+    print(f"\n{'='*60}\nRunning: {script.name}\n{'='*60}")
+    return subprocess.run(cmd, cwd=str(REPO_ROOT)).returncode == 0
 
 
-def run_nb(notebook: Path) -> bool:
-    if not notebook.exists():
-        print(f"\nERROR: notebook not found: {notebook}")
+def run_tex(tex: Path) -> bool:
+    """Compile a standalone TikZ figure and copy the PDF into figures/."""
+    if not tex.exists():
+        print(f"\nERROR: source not found: {tex}")
         return False
-    cmd = [
-        "jupyter", "nbconvert",
-        "--to", "notebook",
-        "--execute",
-        "--inplace",
-        str(notebook),
-    ]
-    print(f"\n{'='*60}")
-    print(f"Running notebook: {notebook.name}")
-    print(f"{'='*60}")
-    result = subprocess.run(cmd, cwd=str(REPO_ROOT))
-    return result.returncode == 0
+    print(f"\n{'='*60}\nCompiling: {tex.name}\n{'='*60}")
+    cmd = ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", tex.name]
+    ok = subprocess.run(cmd, cwd=str(SCRIPTS_DIR)).returncode == 0
+    produced = SCRIPTS_DIR / (tex.stem + ".pdf")
+    if not ok or not produced.exists():
+        return False
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(produced, FIGURES_DIR / produced.name)
+    # tidy LaTeX side products
+    for ext in (".aux", ".log"):
+        (SCRIPTS_DIR / (tex.stem + ext)).unlink(missing_ok=True)
+    return True
 
 
 def main() -> None:
@@ -74,21 +72,20 @@ def main() -> None:
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"],
                     help="Device for scripts that run model inference (default: cuda).")
     ap.add_argument("--skip", nargs="*", default=[],
-                    help="Figure numbers to skip, e.g. --skip 05 08 11")
+                    help="Figure numbers to skip, e.g. --skip 03 08 11")
     args = ap.parse_args()
 
     skip = set(args.skip)
 
     # Canonical manuscript figures (ordered)
-    # Each entry: (label, runner_callable)
     figures: list[tuple[str, callable]] = [
-        ("01", lambda: run_py(SCRIPTS_DIR / "Figure01.py", [], args.device)),
-        ("02", lambda: run_nb(SCRIPTS_DIR / "Figure02.ipynb")),
-        # 03: no script — manually produced vector diagram
+        ("01", lambda: run_tex(SCRIPTS_DIR / "Figure01.tex")),
+        ("02", lambda: run_tex(SCRIPTS_DIR / "Figure02.tex")),
+        ("03", lambda: run_py(SCRIPTS_DIR / "Figure03.py", [], args.device)),
         ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
-        ("05", lambda: run_py(SCRIPTS_DIR / "Figure05.py", [], args.device)),
-        ("06", lambda: run_py_no_device(SCRIPTS_DIR / "Figure06.py")),
-        ("07", lambda: run_nb(SCRIPTS_DIR / "Figure07.ipynb")),
+        ("05", lambda: run_py_no_device(SCRIPTS_DIR / "Figure05.py")),
+        ("06", lambda: run_py(SCRIPTS_DIR / "Figure06.py", [], args.device)),
+        ("07", lambda: run_py_no_device(SCRIPTS_DIR / "Figure07.py")),
         ("08", lambda: run_py(SCRIPTS_DIR / "Figure08.py", [], args.device)),
         ("09", lambda: run_py_no_device(SCRIPTS_DIR / "Figure09.py")),
         ("10", lambda: run_py_no_device(SCRIPTS_DIR / "Figure10.py")),
@@ -96,7 +93,6 @@ def main() -> None:
     ]
 
     results: dict[str, bool | str] = {}
-
     for fig_num, runner in figures:
         if fig_num in skip:
             results[fig_num] = "skipped"
@@ -104,26 +100,16 @@ def main() -> None:
             continue
         results[fig_num] = runner()
 
-    print(f"\n{'='*60}")
-    print("Build summary")
-    print(f"{'='*60}")
+    print(f"\n{'='*60}\nBuild summary\n{'='*60}")
     for fig_num, status in results.items():
-        if status == "skipped":
-            marker = "SKIP"
-        elif status is True:
-            marker = "OK  "
-        else:
-            marker = "FAIL"
+        marker = "SKIP" if status == "skipped" else ("OK  " if status is True else "FAIL")
         print(f"  Figure {fig_num}: {marker}")
-
-    print(f"  Figure 03: no script (manually produced)")
 
     failed = [n for n, s in results.items() if s is False]
     if failed:
         print(f"\n{len(failed)} figure(s) failed: {', '.join(failed)}")
         sys.exit(1)
-    else:
-        print("\nAll requested figures built successfully.")
+    print("\nAll requested figures built successfully.")
 
 
 if __name__ == "__main__":

@@ -75,11 +75,12 @@ mpl.rcParams.update({
 # -----------------------
 # Stages to plot (paper order)
 # -----------------------
-# NOTE: per your request, 3a is omitted (no transient dip shown).
+# NOTE: 3a/3b are merged into a single Stage 3 (deployable fine-tuned model; see C17);
+# the non-deployed pre-trained checkpoint is not shown as a separate stage.
 STAGES: List[Tuple[str, str]] = [
     ("1", "stage1_baseline"),
     ("2", "stage2_replication"),
-    ("3b", "stage3b_finetune"),
+    ("3", "stage3b_finetune"),
     ("4", "stage4_sampling"),
     ("5", "stage5_kd"),
 ]

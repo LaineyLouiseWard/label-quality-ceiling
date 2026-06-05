@@ -16,6 +16,13 @@ wandb/
 logs/
 
 # --------------------
+# TikZ in-place build artifacts (canonical figure outputs live in figures/)
+# --------------------
+scripts/figures/*.pdf
+scripts/figures/*.aux
+scripts/figures/*.log
+
+# --------------------
 # Python
 # --------------------
 __pycache__/

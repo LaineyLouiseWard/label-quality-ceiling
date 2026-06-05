@@ -93,14 +93,16 @@ python scripts/figures/build_all_figures.py --device cuda
 Individual figures:
 
 ```bash
-python scripts/figures/Figure01.py          # Biodiversity tile examples (data only)
+python scripts/figures/Figure03.py          # RGB tile examples (data only)
+python scripts/figures/Figure04.py          # Dataset class-distribution comparison (data only)
 python scripts/figures/Figure09.py          # Confusion matrices (artifacts only)
 python scripts/figures/Figure10.py          # Per-class IoU (metrics only)
 python scripts/figures/Figure11.py          # KD pixel transitions
-jupyter nbconvert --to notebook --execute scripts/figures/Figure02.ipynb
 ```
 
-Figure 3 is compiled from `scripts/figures/Figure03.tex` (TikZ) to `figures/Figure03.pdf`.
+Figures 1 (staged-pipeline flowchart) and 2 (two-axes mitigation schematic) are TikZ,
+compiled from `scripts/figures/Figure01.tex` and `Figure02.tex` to `figures/`
+(`build_all_figures.py` does this automatically).
 
 ---
 

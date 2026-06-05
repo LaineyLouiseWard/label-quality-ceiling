@@ -1,354 +1,313 @@
-#!/usr/bin/env python3
-"""
-Fig 6: OEM taxonomy mapping example (same as the notebook), but as a .py script.
+"""Fig 6: Example low- and high-weight Biodiversity tiles under hard x minority-aware
+sampling (Stage 4), annotated with tile difficulty, minority richness, and resulting weight.
 
-Panels:
-(a) RGB tile
-(b) OEM 8-class mask (raw)
-(c) OEM mask mapped to Biodiversity 6-class taxonomy (relabelled)
-
-Changes vs notebook:
-- Slightly increased horizontal spacing between panels (wspace).
-
-Defaults target a tile that contains all 8 OEM classes:
-  data/openearthmap_raw/.../dolnoslaskie/labels/dolnoslaskie_25.tif
+Writes:
+  figures/Figure06.pdf
 
 Run:
   python scripts/figures/Figure06.py
 """
 
-from __future__ import annotations
-
-import argparse
+import sys
 from pathlib import Path
 
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap, BoundaryNorm, to_rgb
-from matplotlib.gridspec import GridSpec
-from matplotlib.patches import Patch, Rectangle
-from PIL import Image
-import rasterio
+def find_repo_root(start: Path) -> Path:
+    start = start.resolve()
+    for p in [start, *start.parents]:
+        if (p / "geoseg").is_dir() and (p / "config").is_dir():
+            return p
+    raise FileNotFoundError(f"Could not find repo root from {start}")
 
+repo_root = find_repo_root(Path.cwd())
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
-# ----------------------------
-# Matplotlib styling
-# ----------------------------
-mpl.rcParams.update(
-    {
-        "font.family": "serif",
-        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
-        "mathtext.fontset": "stix",
-        "axes.titlesize": 12,
-        "legend.fontsize": 10,
-    }
+# -----------------------
+# Paths (NEW REPO)
+# -----------------------
+SPLIT_ROOT = repo_root / "data" / "biodiversity_split" / "train_rep"
+MSK_DIR = SPLIT_ROOT / "masks"
+
+WEIGHTS_CANDIDATES = [
+    repo_root / "artifacts" / "stage4_sampling_weights.tsv",
+]
+
+OUT_DIR = repo_root / "figures"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_PDF = OUT_DIR / "Figure06.pdf"
+
+# Stage 3b checkpoint used to compute hardness (pixel error mass)
+STAGE3B_CKPT = repo_root / "model_weights" / "biodiversity" / "stage3b_finetune" / "stage3b_finetune.ckpt"
+
+print("Repo root:", repo_root)
+print("Masks dir:", MSK_DIR)
+print("Stage3b ckpt:", STAGE3B_CKPT)
+print("Output:", OUT_PDF)
+
+assert MSK_DIR.exists(), f"Missing masks dir: {MSK_DIR}"
+assert STAGE3B_CKPT.exists(), (
+    f"Missing Stage 3b checkpoint: {STAGE3B_CKPT}\n"
+    "Hardness is computed from this checkpoint (as in scripts/data_prep/build_stage4_weights.py)."
 )
 
-# ----------------------------
-# OEM 8-class legend (IDs 1..8, 0 = background/unlabeled)
-# ----------------------------
-OEM8_HEX = {
-    1: "#800000",  # Bareland
-    2: "#00FF24",  # Rangeland
-    3: "#949494",  # Developed space
-    4: "#FFFFFF",  # Road
-    5: "#226126",  # Tree
-    6: "#0045FF",  # Water
-    7: "#4BB549",  # Agriculture land
-    8: "#DE1F07",  # Building
-}
-OEM8_NAMES = {
-    1: "Bareland",
-    2: "Rangeland",
-    3: "Dev. space",
-    4: "Road",
-    5: "Tree",
-    6: "Water",
-    7: "Agri. land",
-    8: "Building",
-}
+WEIGHTS_TSV = next((p for p in WEIGHTS_CANDIDATES if p.exists()), None)
+assert WEIGHTS_TSV is not None, (
+    "Missing Stage 4 weights TSV. Looked for:\n"
+    + "\n".join([f"  - {p}" for p in WEIGHTS_CANDIDATES])
+    + "\nGenerate with:\n"
+    "  python scripts/data_prep/build_stage4_weights.py --ckpt model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt"
+)
 
-# ----------------------------
-# Biodiversity 6-class palette (project)
-# ----------------------------
+print("Weights TSV:", WEIGHTS_TSV)
+
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from PIL import Image
+from matplotlib.patches import Patch
+from matplotlib.colors import ListedColormap, BoundaryNorm
+
+import torch
+from torch.utils.data import DataLoader
+
+from geoseg.models.ftunetformer import ft_unetformer
+from geoseg.datasets.biodiversity_dataset import BiodiversityTrainDataset, val_aug
+
+mpl.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+    "axes.titlesize": 12,
+    "axes.labelsize": 11,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "legend.fontsize": 10,
+})
+
+# %%
+# --- palette + class names ---
 COLOR_MAP = {
     0: [0, 0, 0],
-    1: [250, 62, 119],   # Forest
-    2: [168, 232, 84],   # Grassland
-    3: [242, 180, 92],   # Cropland
-    4: [59, 141, 247],   # Settlement
-    5: [255, 214, 33],   # Semi-natural
-}
-CLASS_NAMES = {
-    0: "Background",
-    1: "Forest land",
-    2: "Grassland",
-    3: "Cropland",
-    4: "Settlement",
-    5: "Semi-nat.",
+    1: [250, 62, 119],
+    2: [168, 232, 84],
+    3: [242, 180, 92],
+    4: [59, 141, 247],
+    5: [255, 214, 33],
 }
 
+CLASS_NAMES = [
+    "Background", "Forest land", "Grassland", "Cropland",
+    "Settlement", "Semi-nat."
+]
 
-# ----------------------------
-# Helpers (as per notebook)
-# ----------------------------
-def rgb_percentile_uint8(rgb_float: np.ndarray, p_lo: float = 2, p_hi: float = 98, gamma: float = 1.1) -> np.ndarray:
-    rgb = rgb_float.astype(np.float32)
-    out = np.zeros_like(rgb, dtype=np.float32)
-    for c in range(3):
-        band = rgb[..., c]
-        vals = band[np.isfinite(band)]
-        if vals.size == 0:
-            continue
-        lo, hi = np.percentile(vals, [p_lo, p_hi])
-        if hi <= lo:
-            continue
-        x = (band - lo) / (hi - lo)
-        x = np.clip(x, 0, 1)
-        x = x ** (1.0 / gamma)
-        out[..., c] = np.nan_to_num(x, nan=0.0)
-    return (out * 255).round().astype(np.uint8)
+colors = np.array([np.array(COLOR_MAP[i]) / 255.0 for i in range(6)])
+cmap = ListedColormap(colors)
+norm = BoundaryNorm(np.arange(-0.5, 6.5), cmap.N)
 
+# %%
+# Stage 4 weighting hyperparams (MUST match scripts/data_prep/build_stage4_weights.py defaults)
+EPS = 1e-6
+BETA_TEMPER = 0.5      # (hardness + eps)^beta
+GAMMA_RICH = 1.0       # (richness + eps)^gamma
 
-def read_rgb_and_mpp(image_tif: Path, band_order: tuple[int, int, int] = (1, 2, 3)) -> tuple[np.ndarray, float]:
-    with rasterio.open(image_tif) as src:
-        rgb = np.transpose(src.read(list(band_order)).astype(np.float32), (1, 2, 0))
-        rgb[~np.isfinite(rgb)] = np.nan
+# Note: final weight also includes clipping/normalisation/mixing; we read that from the TSV.
 
-        px = abs(float(src.transform.a))
-        if src.crs is not None and src.crs.is_projected:
-            mpp_x = px
-        else:
-            cy = (src.bounds.top + src.bounds.bottom) / 2.0
-            mpp_x = px * 111320.0 * np.cos(np.deg2rad(cy))
+def _norm_id(x: str) -> str:
+    """Strip _repN suffix so replicas share the same base weight (matches build_stage4_weights.py)."""
+    if "_rep" in x:
+        base, rep = x.rsplit("_rep", 1)
+        if rep.isdigit():
+            return base
+    return x
 
-    return rgb_percentile_uint8(rgb), float(mpp_x)
+def load_stage4_weight_map(weights_tsv: Path) -> dict[str, float]:
+    m = {}
+    with open(weights_tsv, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            k, w = line.split("\t")
+            m[k] = float(w)
+    return m
 
+w_map = load_stage4_weight_map(WEIGHTS_TSV)
+w_vals = np.array(list(w_map.values()), dtype=np.float32)
+print("Loaded Stage4 weights:", len(w_vals), "min/med/max:", float(w_vals.min()), float(np.median(w_vals)), float(w_vals.max()))
 
-def read_mask_any(mask_path: Path) -> np.ndarray:
-    mask_path = Path(mask_path)
-    suf = mask_path.suffix.lower()
-    if suf in [".tif", ".tiff"]:
-        with rasterio.open(mask_path) as src:
-            return src.read(1)
-    if suf == ".png":
-        arr = np.array(Image.open(mask_path))
-        if arr.ndim == 3:
-            arr = arr[..., 0]
-        return arr
-    raise ValueError(f"Unsupported mask format: {mask_path}")
+# pick representative "easy" and "hard" examples from final Stage4 weights
+q_lo, q_hi = 0.10, 0.90
+w_lo = np.quantile(w_vals, q_lo)
+w_hi = np.quantile(w_vals, q_hi)
 
+keys = list(w_map.keys())
+weights_arr = np.array([w_map[k] for k in keys], dtype=np.float32)
 
-def add_scale_bar_pixels(
-    ax: plt.Axes,
-    img_shape: tuple[int, int, int] | tuple[int, int],
-    meters_per_pixel: float,
-    length_m: float = 100,
-    pad_px: int = 14,
-    bar_height_px: int = 6,
-) -> None:
-    h, w = img_shape[:2]
-    bar_len_px = int(round(length_m / meters_per_pixel))
-    bar_len_px = min(bar_len_px, w - 2 * pad_px)
-    if bar_len_px < 3:
-        return
+idx_easy = int(np.argmin(np.abs(weights_arr - w_lo)))
+idx_hard = int(np.argmin(np.abs(weights_arr - w_hi)))
 
-    x0 = pad_px
-    y0 = h - pad_px - bar_height_px
+easy_id = keys[idx_easy]
+hard_id = keys[idx_hard]
 
-    # Solid white backing rectangle (bar + label); bbox on text covers the label area.
-    _bg = 6
-    ax.add_patch(Rectangle(
-        (x0 - _bg, y0 - _bg),
-        bar_len_px + 2 * _bg, bar_height_px + 2 * _bg,
-        facecolor="white", edgecolor="none", zorder=3,
-    ))
-    ax.add_patch(Rectangle((x0, y0), bar_len_px, bar_height_px, facecolor="black", edgecolor="black", zorder=4))
+print("Easy:", easy_id, "final_w:", float(w_map[easy_id]))
+print("Hard:", hard_id, "final_w:", float(w_map[hard_id]))
+
+# %%
+def mask_path_from_id(msk_dir: Path, img_id: str) -> Path:
+    p = msk_dir / f"{img_id}.png"
+    if not p.exists():
+        hits = list(msk_dir.glob(f"{img_id}*.png"))
+        if hits:
+            return hits[0]
+        raise FileNotFoundError(f"Mask not found for {img_id}: {p}")
+    return p
+
+easy_mask_path = mask_path_from_id(MSK_DIR, easy_id)
+hard_mask_path = mask_path_from_id(MSK_DIR, hard_id)
+
+easy_mask = np.array(Image.open(easy_mask_path))
+hard_mask = np.array(Image.open(hard_mask_path))
+
+print("Easy mask:", easy_mask_path.name, easy_mask.shape, easy_mask.dtype)
+print("Hard mask:", hard_mask_path.name, hard_mask.shape, hard_mask.dtype)
+
+# %%
+def add_panel_label_above_center(ax, label, fontsize=32):
     ax.text(
-        x0 + bar_len_px / 2,
-        y0 - 5,
-        f"{int(length_m)} m",
-        ha="center",
-        va="bottom",
-        fontsize=27,
-        zorder=5,
-        bbox=dict(facecolor="white", edgecolor="none", alpha=1.0, pad=1),
+        0.5, 1.02, label,
+        transform=ax.transAxes,
+        ha="center", va="bottom",
+        fontsize=fontsize, fontweight="bold"
     )
 
-
-def add_north_arrow_pixels(ax: plt.Axes, img_shape: tuple[int, int, int] | tuple[int, int], pad_px: int = 18, size_px: int = 36) -> None:
-    h, w = img_shape[:2]
-    x = w - pad_px
-    y = h - pad_px
-    ax.annotate(
-        "N",
-        xy=(x, y - size_px),
-        xytext=(x, y),
-        ha="center",
-        va="center",
-        fontsize=27,
-        fontweight="bold",
-        arrowprops=dict(arrowstyle="-|>", linewidth=1.0),
-        bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1),
+def add_weights_text(ax, text, fontsize=26):
+    # Put inside the axis at the bottom so it won't get cropped by savefig.
+    ax.text(
+        0.5, -0.08, text,
+        transform=ax.transAxes,
+        ha="center", va="bottom",
+        fontsize=fontsize,
+        fontweight="normal",
+        bbox=dict(facecolor="white", alpha=0.65, edgecolor="none", pad=2.0),
     )
 
+# %%
+def load_student_from_lightning_ckpt(net: torch.nn.Module, ckpt_path: Path) -> torch.nn.Module:
+    ckpt = torch.load(str(ckpt_path), map_location="cpu")
+    if "state_dict" not in ckpt:
+        raise ValueError(f"Invalid Lightning checkpoint: {ckpt_path}")
+    sd = ckpt["state_dict"]
+    net_sd = {k.replace("net.", "", 1): v for k, v in sd.items() if k.startswith("net.")}
+    if not net_sd:
+        net_sd = {k.replace("model.", "", 1): v for k, v in sd.items() if k.startswith("model.")}
+    if not net_sd:
+        raise ValueError("Could not locate model weights in checkpoint")
+    net.load_state_dict(net_sd, strict=False)
+    return net
 
-def find_repo_root() -> Path:
-    p = Path.cwd().resolve()
-    for _ in range(10):
-        if (p / "data").is_dir():
-            return p
-        if p == p.parent:
+@torch.no_grad()
+def compute_hardness_error_fraction(img_id: str, data_root: Path, ckpt_path: Path, device: str = "cuda") -> float:
+    """
+    Hardness proxy used by build_stage4_weights.py:
+      err = mean(pred != gt) over pixels.
+    We compute it for the single tile (val_aug).
+    """
+    ds = BiodiversityTrainDataset(data_root=str(data_root), transform=val_aug)
+
+    # Find index by base id (train_rep includes reps; keys are base ids)
+    target_idx = None
+    for i, rid in enumerate(ds.img_ids):
+        if _norm_id(rid) == img_id:
+            target_idx = i
             break
-        p = p.parent
-    raise RuntimeError("Could not find repo root (expected to find /data).")
+    if target_idx is None:
+        raise FileNotFoundError(f"Could not locate {img_id} in dataset ids under {data_root}")
 
+    sample = ds[target_idx]
+    img = sample["img"].unsqueeze(0)
+    gt = sample["gt_semantic_seg"].unsqueeze(0)
 
-# ----------------------------
-# Plot
-# ----------------------------
-def make_fig(rgb_tif: Path, mask8_tif: Path, mask6_png: Path, out_pdf: Path, scale_m: float = 100.0) -> None:
-    rgb8, mpp = read_rgb_and_mpp(rgb_tif)
-    mask8 = read_mask_any(mask8_tif)
-    mask6 = read_mask_any(mask6_png)
+    net = ft_unetformer(pretrained=False, weight_path=None, num_classes=6, decoder_channels=256)
+    net = load_student_from_lightning_ckpt(net, ckpt_path)
+    net.eval()
 
-    # OEM 8-class cmap (render 0 as black via "under"; do NOT include in legend)
-    cmap8 = ListedColormap([to_rgb(OEM8_HEX[i]) for i in range(1, 9)])
-    cmap8.set_under("black")
-    norm8 = BoundaryNorm(np.arange(0.5, 9.5, 1), cmap8.N)
+    dev = torch.device(device if (device == "cuda" and torch.cuda.is_available()) else "cpu")
+    net.to(dev)
+    img = img.to(dev)
+    gt = gt.to(dev)
 
-    # Biodiversity 6-class cmap
-    biodiv_colors = np.array([COLOR_MAP[i] for i in range(6)]) / 255.0
-    cmap6 = ListedColormap(biodiv_colors)
-    norm6 = BoundaryNorm(np.arange(-0.5, 6.5), cmap6.N)
+    pred = torch.argmax(net(img), dim=1)
+    err = (pred != gt).float().mean().item()
+    return float(err)
 
-    # Figure layout: 3 panels + legend row (keeps panel sizes stable)
-    fig = plt.figure(figsize=(13.5*2, 8.5*2), dpi=300)
-    gs = GridSpec(
-        2,
-        3,
-        figure=fig,
-        height_ratios=[1.0, 0.28],
-        hspace=0.05,
-        wspace=0.12,  # <-- slightly increased horizontal spacing vs the notebook
-    )
+def compute_minority_richness_fraction(mask_np: np.ndarray) -> float:
+    # minority = Settlement(4) or SemiNatural(5)
+    m = (mask_np == 4) | (mask_np == 5)
+    # exclude ignore index (0) from denom? build_stage4_weights.py uses mean over all pixels, incl bg
+    # so we match it exactly: mean over full tile.
+    return float(m.mean())
 
-    fig.subplots_adjust(bottom=0.25)
+def component_weights_from_h_r(h: float, r: float) -> tuple[float, float]:
+    hard_w = (h + EPS) ** BETA_TEMPER
+    min_w = (r + EPS) ** GAMMA_RICH
+    return float(hard_w), float(min_w)
 
-    ax_a = fig.add_subplot(gs[0, 0])
-    ax_b = fig.add_subplot(gs[0, 1])
-    ax_c = fig.add_subplot(gs[0, 2])
+# %%
+# Compute components for the two shown tiles
+easy_h = compute_hardness_error_fraction(easy_id, SPLIT_ROOT, STAGE3B_CKPT)
+hard_h = compute_hardness_error_fraction(hard_id, SPLIT_ROOT, STAGE3B_CKPT)
 
-    leg_a = fig.add_subplot(gs[1, 0])
-    leg_b = fig.add_subplot(gs[1, 1])
-    leg_c = fig.add_subplot(gs[1, 2])
+easy_r = compute_minority_richness_fraction(easy_mask)
+hard_r = compute_minority_richness_fraction(hard_mask)
 
-    # (a) RGB
-    ax_a.imshow(rgb8)
-    ax_a.set_axis_off()
-    ax_a.text(0.5, 1.02, "(a)", transform=ax_a.transAxes, ha="center", va="bottom", fontsize=27, fontweight="bold")
-    add_scale_bar_pixels(ax_a, rgb8.shape, mpp, length_m=scale_m)
-    add_north_arrow_pixels(ax_a, rgb8.shape)
+easy_hw, easy_mw = component_weights_from_h_r(easy_h, easy_r)
+hard_hw, hard_mw = component_weights_from_h_r(hard_h, hard_r)
 
-    # (b) OEM 8-class
-    ax_b.imshow(mask8, cmap=cmap8, norm=norm8, interpolation="nearest", resample=False)
-    ax_b.set_axis_off()
-    ax_b.text(0.5, 1.02, "(b)", transform=ax_b.transAxes, ha="center", va="bottom", fontsize=27, fontweight="bold")
+easy_final = float(w_map[easy_id])
+hard_final = float(w_map[hard_id])
 
-    # (c) mapped 6-class
-    ax_c.imshow(mask6, cmap=cmap6, norm=norm6, interpolation="nearest", resample=False)
-    ax_c.set_axis_off()
-    ax_c.text(0.5, 1.02, "(c)", transform=ax_c.transAxes, ha="center", va="bottom", fontsize=27, fontweight="bold")
+print(f"Easy components: h={easy_h:.4f}, r={easy_r:.4f}, hard_w={easy_hw:.4f}, min_w={easy_mw:.4f}, final={easy_final:.4f}")
+print(f"Hard components: h={hard_h:.4f}, r={hard_r:.4f}, hard_w={hard_hw:.4f}, min_w={hard_mw:.4f}, final={hard_final:.4f}")
 
-    # Legends row (no effect on panel sizing)
-    for ax in (leg_a, leg_b, leg_c):
-        ax.set_axis_off()
+# %%
+def plot_figure06_hard_x_minority_sampling(
+    easy_mask, hard_mask,
+    easy_hw, easy_mw, easy_final,
+    hard_hw, hard_mw, hard_final,
+    out_pdf: Path
+):
+    fig = plt.figure(figsize=(8*3, 4.2*3), dpi=300)
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.18], hspace=0.15, wspace=-0.15)
 
-    oem_handles = [
-        Patch(
-            facecolor=to_rgb(OEM8_HEX[i]),
-            edgecolor="black" if i == 4 else "none",  # road is white -> outline
-            label=OEM8_NAMES[i],
-        )
-        for i in range(1, 9)
-    ]
-    leg_b.legend(
-        handles=oem_handles,
-        loc="center",
-        ncol=2,
-        frameon=False,
-        fontsize=28,
-        handlelength=1.2,
-        handleheight=1.0,
-        columnspacing=1.0,
-        labelspacing=0.55,
-        bbox_to_anchor=(0.5, 0.75),
-    )
+    # (a) easy
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.imshow(easy_mask, cmap=cmap, norm=norm, interpolation="nearest")
+    ax1.set_axis_off()
+    add_panel_label_above_center(ax1, "(a)")
+    add_weights_text(ax1, f"hard={easy_hw:.2f}, minority={easy_mw:.2f}, final={easy_final:.2f}", fontsize=28)
 
-    # Biodiversity legend (include Background)
-    biodiv_handles = [
-        Patch(
-            facecolor=np.array(COLOR_MAP[i]) / 255.0,
-            edgecolor="black" if i == 0 else "none",  # outline helps the black swatch
-            label=CLASS_NAMES[i],
-        )
-        for i in [0, 1, 2, 3, 4, 5]
-    ]
+    # (b) hard
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.imshow(hard_mask, cmap=cmap, norm=norm, interpolation="nearest")
+    ax2.set_axis_off()
+    add_panel_label_above_center(ax2, "(b)")
+    add_weights_text(ax2, f"hard={hard_hw:.2f}, minority={hard_mw:.2f}, final={hard_final:.2f}", fontsize=28)
 
-    leg_c.legend(
-        handles=biodiv_handles,
-        loc="center",
-        ncol=2,          # <-- change to 2 so it fits nicely with 6 entries
-        frameon=False,
-        fontsize=27,
-        handlelength=1.2,
-        handleheight=1.0,
-        columnspacing=1.0,
-        labelspacing=0.55,
-        bbox_to_anchor=(0.5, 0.89),
-    )
+    # legend row
+    legend_ax = fig.add_subplot(gs[1, :])
+    legend_ax.axis("off")
+    handles = [Patch(facecolor=colors[i], label=CLASS_NAMES[i]) for i in range(6)]
+    legend_ax.legend(handles=handles, loc="center",bbox_to_anchor=(0.5, 0.40), ncol=3, frameon=False, fontsize=32)
 
-
-    out_pdf = Path(out_pdf)
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_pdf, bbox_inches="tight")
+    fig.savefig(out_pdf, dpi=300, pad_inches=0.02)
     plt.close(fig)
     print("Saved:", out_pdf)
 
-
-def parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--rgb-tif", type=str, default=None)
-    ap.add_argument("--mask8-tif", type=str, default=None)
-    ap.add_argument("--mask6-png", type=str, default=None)
-    ap.add_argument("--out", type=str, default=None)
-    ap.add_argument("--scale-m", type=float, default=100.0)
-    return ap.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-    repo = find_repo_root()
-
-    # Default: daressalaam_28 (contains all 8 OEM classes)
-    region = "dolnoslaskie"
-    raw_tile = "dolnoslaskie_25"
-    relab_tile = f"oem_{region}_{raw_tile}"
-
-    rgb_tif = Path(args.rgb_tif) if args.rgb_tif else repo / f"data/openearthmap_relabelled/images/{relab_tile}.tif"
-    mask6_png = Path(args.mask6_png) if args.mask6_png else repo / f"data/openearthmap_relabelled/masks/{relab_tile}.png"
-    mask8_tif = Path(args.mask8_tif) if args.mask8_tif else repo / (
-        f"data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/{region}/labels/{raw_tile}.tif"
-    )
-    out_pdf = Path(args.out) if args.out else repo / "figures/Figure06.pdf"
-
-    for p in [rgb_tif, mask6_png, mask8_tif]:
-        if not p.exists():
-            raise FileNotFoundError(p)
-
-    make_fig(rgb_tif=rgb_tif, mask8_tif=mask8_tif, mask6_png=mask6_png, out_pdf=out_pdf, scale_m=args.scale_m)
-
-
-if __name__ == "__main__":
-    main()
+plot_figure06_hard_x_minority_sampling(
+    easy_mask, hard_mask,
+    easy_hw, easy_mw, easy_final,
+    hard_hw, hard_mw, hard_final,
+    OUT_PDF
+)

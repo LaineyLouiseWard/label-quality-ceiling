@@ -372,17 +372,19 @@ python scripts/figures/build_all_figures.py --device cuda
 
 | Fig | Command | Key dependency |
 |-----|---------|----------------|
-| 1 | `python scripts/figures/Figure01.py` | `data/biodiversity_raw/` |
-| 2 | `jupyter nbconvert --to notebook --execute scripts/figures/Figure02.ipynb` | `data/openearthmap_filtered/` |
-| 3 | *Manually produced vector diagram (no script)* | -- |
-| 4 | `python scripts/figures/Figure04.py` | `artifacts/stage4_sampling_weights.tsv` |
-| 5 | `python scripts/figures/Figure05.py` | `artifacts/stage4_sampling_weights.tsv`, Stage 3b ckpt |
-| 6 | `python scripts/figures/Figure06.py` | `data/openearthmap_relabelled/`, `data/openearthmap_raw/` |
-| 7 | `jupyter nbconvert --to notebook --execute scripts/figures/Figure07.ipynb` | `data/biodiversity_raw/masks/` |
+| 1 | `pdflatex scripts/figures/Figure01.tex` (staged pipeline flowchart, TikZ) | -- |
+| 2 | `pdflatex scripts/figures/Figure02.tex` (two-axes mitigation schematic, TikZ) | -- |
+| 3 | `python scripts/figures/Figure03.py` | `data/biodiversity_raw/` |
+| 4 | `python scripts/figures/Figure04.py` (dataset class-distribution comparison) | `data/biodiversity_raw/masks/`, `data/openearthmap_filtered/masks/` |
+| 5 | `python scripts/figures/Figure05.py` | `artifacts/stage4_sampling_weights.tsv` |
+| 6 | `python scripts/figures/Figure06.py` | `artifacts/stage4_sampling_weights.tsv`, Stage 3b ckpt |
+| 7 | `python scripts/figures/Figure07.py` | `data/openearthmap_relabelled/`, `data/openearthmap_raw/` |
 | 8 | `python scripts/figures/Figure08.py` | All stage checkpoints, `data/biodiversity_split/val/` |
 | 9 | `python scripts/figures/Figure09.py` | `evaluation/evaluation_results/val/` (confusion matrices) |
 | 10 | `python scripts/figures/Figure10.py` | `evaluation/evaluation_results/val/` (metrics.json) |
 | 11 | `python scripts/figures/Figure11.py` | Stage 1 + Stage 5 checkpoints, `data/biodiversity_split/val/` |
+
+(For Figures 1--2, `build_all_figures.py` compiles the `.tex` and copies the PDF into `figures/`.)
 
 All outputs are written to `figures/`.
 See [FIGURE_MAP.md](FIGURE_MAP.md) for full per-figure dependency lists.

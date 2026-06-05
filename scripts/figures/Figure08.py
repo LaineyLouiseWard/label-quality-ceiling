@@ -5,7 +5,7 @@ scripts/figures/Figure08.py
 Qualitative ablation comparison on FOUR tiles, shown as 4 columns.
 
 Layout (7 rows x 4 columns):
-  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3a, Stage 3b, Stage 4, Stage 5
+  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3, Stage 4, Stage 5
   Columns: (a)–(d) = four chosen tile IDs
 
 Shows RAW predictions (no extra AOI masking beyond GT==0 invalid masking used for display).
@@ -86,24 +86,29 @@ IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 # -----------------------------------------------------------------------------
 # Each entry: col index (0-based), row keys to annotate, rect (x, y, w, h)
 # in 512×512 pixel coords, edge colour, and linewidth.
+# Each rectangle is drawn on the ground truth and every stage row of its column,
+# marking the same image region all the way down so the feature's evolution across
+# stages is trackable (settlement consolidating, semi-natural recovering, roads
+# remaining fragmented).
+ANNOTATED_ROWS = {"gt", "s1", "s2", "s3", "s4", "s5"}
 HIGHLIGHT_ANNOTATIONS = [
     {  # H1: Compact settlement cluster — tile (b)
         "col": 1,
-        "rows": {"gt", "s4"},
+        "rows": ANNOTATED_ROWS,
         "rect": (100, 40, 300, 260),
         "color": "#00FFFF",   # cyan
         "lw": 6.0,
     },
     {  # H2: Large semi-natural region — tile (d)
         "col": 3,
-        "rows": {"gt", "s1", "s4"},
+        "rows": ANNOTATED_ROWS,
         "rect": (140, 40, 320, 340),
         "color": "#7B2FBE",   # purple
         "lw": 6.0,
     },
     {  # H3: Thin linear road/settlement features — tile (c)
         "col": 2,
-        "rows": {"gt", "s5"},
+        "rows": ANNOTATED_ROWS,
         "rect": (20, 120, 380, 200),
         "color": "#FFFFFF",   # white
         "lw": 6.0,
@@ -268,7 +273,7 @@ def make_grid_figure(
 
     anns = annotations if annotations else []
 
-    keys = ["img", "gt", "s1", "s2", "s3a", "s3b", "s4", "s5"]
+    keys = ["img", "gt", "s1", "s2", "s3", "s4", "s5"]
     for c in range(n_cols):
         col = columns[c]
         for r, k in enumerate(keys):
@@ -322,8 +327,8 @@ def main() -> None:
     # Match your actual folder names under model_weights/biodiversity/
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
     ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2_replication")
-    ap.add_argument("--stage3a-ckpt", default="model_weights/biodiversity/stage3a_pretrain")
-    ap.add_argument("--stage3b-ckpt", default="model_weights/biodiversity/stage3b_finetune")
+    # Stage 3 = deployable fine-tuned model (3a pre-train + 3b fine-tune merged; see C17)
+    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3b_finetune")
     ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_sampling")
     ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_kd")
 
@@ -339,12 +344,11 @@ def main() -> None:
     data_root = (repo_root / args.data_root).resolve()
 
     ckpt_paths = {
-        "s1":  resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve())),
-        "s2":  resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
-        "s3a": resolve_ckpt(str((repo_root / args.stage3a_ckpt).resolve())),
-        "s3b": resolve_ckpt(str((repo_root / args.stage3b_ckpt).resolve())),
-        "s4":  resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve())),
-        "s5":  resolve_ckpt(str((repo_root / args.stage5_ckpt).resolve())),
+        "s1": resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve())),
+        "s2": resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
+        "s3": resolve_ckpt(str((repo_root / args.stage3_ckpt).resolve())),
+        "s4": resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve())),
+        "s5": resolve_ckpt(str((repo_root / args.stage5_ckpt).resolve())),
     }
 
     nets: Dict[str, torch.nn.Module] = {}
@@ -365,7 +369,7 @@ def main() -> None:
         invalid = (gt == 0)
 
         pred: Dict[str, np.ndarray] = {}
-        for stage_key in ["s1", "s2", "s3a", "s3b", "s4", "s5"]:
+        for stage_key in ["s1", "s2", "s3", "s4", "s5"]:
             pred[stage_key] = predict_mask(nets[stage_key], img_t, device)
 
         columns.append({
@@ -373,8 +377,7 @@ def main() -> None:
             "gt": colorize_mask(gt, invalid=invalid),
             "s1": colorize_mask(pred["s1"], invalid=invalid),
             "s2": colorize_mask(pred["s2"], invalid=invalid),
-            "s3a": colorize_mask(pred["s3a"], invalid=invalid),
-            "s3b": colorize_mask(pred["s3b"], invalid=invalid),
+            "s3": colorize_mask(pred["s3"], invalid=invalid),
             "s4": colorize_mask(pred["s4"], invalid=invalid),
             "s5": colorize_mask(pred["s5"], invalid=invalid),
         })
@@ -389,8 +392,7 @@ def main() -> None:
         "Ground\nTruth",
         "Stage 1:\nBaseline",
         "Stage 2:\n+Replication",
-        "Stage 3a:\n+OEM\nPre-Training",
-        "Stage 3b:\n+OEM\nFine-Tuning",
+        "Stage 3:\n+OEM Pre-Training\n& Fine-Tuning",
         "Stage 4:\n+Hard × Minority\nSampling",
         "Stage 5:\n+Knowledge\nDistillation",
     ]

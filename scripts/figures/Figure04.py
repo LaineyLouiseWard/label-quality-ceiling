@@ -2,17 +2,25 @@
 """
 scripts/figures/Figure04.py
 
-Stage 4 sampling weight distribution.
+Combined class-distribution comparison of the two datasets used in this study
+(review comment C14: present the Biodiversity and OpenEarthMap distributions
+alongside each other for easier comparison).
 
-Loads the pre-computed Stage 4 hardness × minority-aware sampling weights
-from artifacts/stage4_sampling_weights.tsv, computes summary statistics,
-plots a histogram, and writes a numeric summary.
+Merges the former standalone figures:
+  - Biodiversity class-imbalance summary  (was Figure07.ipynb)
+  - filtered OpenEarthMap class distribution (was Figure02.ipynb)
 
-Outputs:
+Layout (2 rows x 2 columns); both datasets shown in the same 6-class Biodiversity
+taxonomy for a like-for-like comparison (OEM harmonised per the pre-training mapping):
+  Row 1  Biodiversity (target):    (a) tile presence   (b) mean pixel proportion
+  Row 2  OpenEarthMap (auxiliary): (c) tile presence   (d) mean pixel proportion
+
+Data:
+  data/biodiversity_raw/masks/*.png       (6-class Biodiversity taxonomy)
+  data/openearthmap_filtered/masks/*.tif  (native 8-class OEM, remapped here to 6 classes)
+
+Output:
   figures/Figure04.pdf
-
-Run:
-  python scripts/figures/Figure04.py
 """
 
 from __future__ import annotations
@@ -22,114 +30,166 @@ from pathlib import Path
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from PIL import Image
+import rasterio
 
 
-# ---------------------------------------------------------------------------
-# Repo root detection
-# ---------------------------------------------------------------------------
-def find_repo_root(start: Path) -> Path:
-    for p in [start.resolve(), *start.resolve().parents]:
-        if (p / "artifacts").is_dir() and (p / "geoseg").is_dir():
+def find_repo_root() -> Path:
+    p = Path.cwd().resolve()
+    for _ in range(10):
+        if (p / "data").is_dir() and (p / "scripts").is_dir():
             return p
-    raise FileNotFoundError(f"Could not find repo root from {start}")
+        if p == p.parent:
+            break
+        p = p.parent
+    raise RuntimeError("Could not find repo root (need data/ and scripts/).")
 
 
-repo_root = find_repo_root(Path(__file__).parent)
+REPO_ROOT = find_repo_root()
 
-WEIGHTS_TSV = repo_root / "artifacts" / "stage4_sampling_weights.tsv"
-OUT_PDF     = repo_root / "figures" / "Figure04.pdf"
-OUT_PDF.parent.mkdir(parents=True, exist_ok=True)
-
-
-# ---------------------------------------------------------------------------
-# Style — match existing figure scripts
-# ---------------------------------------------------------------------------
 mpl.rcParams.update({
-    "font.family":      "serif",
-    "font.serif":       ["Times New Roman", "Times", "DejaVu Serif"],
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
     "mathtext.fontset": "stix",
-    "font.size":        12,
-    "axes.titlesize":   14,
-    "axes.labelsize":   14,
-    "xtick.labelsize":  12,
-    "ytick.labelsize":  12,
-    "legend.fontsize":  12,
-    "figure.dpi":       300,
-    "savefig.dpi":      300,
 })
 
-
-# ---------------------------------------------------------------------------
-# Load weights
-# ---------------------------------------------------------------------------
-img_ids: list[str] = []
-weights: list[float] = []
-
-with open(WEIGHTS_TSV, "r", encoding="utf-8") as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        img_id, w = line.split("\t")
-        img_ids.append(img_id)
-        weights.append(float(w))
-
-w = np.array(weights, dtype=np.float64)
-n = len(w)
-
-# ---------------------------------------------------------------------------
-# Summary statistics
-# ---------------------------------------------------------------------------
-stats = {
-    "n":    n,
-    "min":  float(np.min(w)),
-    "max":  float(np.max(w)),
-    "mean": float(np.mean(w)),
-    "std":  float(np.std(w)),
-    "median":  float(np.median(w)),
-    "p25":  float(np.percentile(w, 25)),
-    "p75":  float(np.percentile(w, 75)),
-    "p95":  float(np.percentile(w, 95)),
+# -----------------------------------------------------------------------------
+# Biodiversity (target dataset) — 6-class taxonomy, 5 foreground classes plotted
+# -----------------------------------------------------------------------------
+BIO_COLOR = {
+    1: [250, 62, 119],   # Forest
+    2: [168, 232, 84],   # Grassland
+    3: [242, 180, 92],   # Cropland
+    4: [59, 141, 247],   # Settlement
+    5: [255, 214, 33],   # Semi-natural grassland
 }
+BIO_NAMES = {1: "Forest", 2: "Grassland", 3: "Cropland", 4: "Settlement", 5: "Semi-nat."}
+BIO_IDS = [1, 2, 3, 4, 5]
 
-# ---------------------------------------------------------------------------
-# Plot
-# ---------------------------------------------------------------------------
-fig, ax = plt.subplots(figsize=(7.5, 4.5), dpi=300)
+# -----------------------------------------------------------------------------
+# OpenEarthMap (auxiliary dataset) — shown in the HARMONISED 6-class Biodiversity
+# taxonomy used during pre-training (Table "Taxonomy harmonisation", main.tex).
+# Native OEM class id -> Biodiversity class id (pre-training, hard labels):
+#   Tree(5)->Forest(1); Rangeland(2)->Grassland(2); Agriculture(7)->Cropland(3);
+#   Building(8)/Developed space(3)/Road(4)->Settlement(4);
+#   Bareland(1)+Water(6)->Background(0)  (bareland->Semi-nat only during KD).
+# No native class maps to semi-natural grassland under the pre-training mapping,
+# so OEM contributes no semi-natural exposure (an honest, informative zero).
+# -----------------------------------------------------------------------------
+OEM_NATIVE_TO_BIO = {1: 0, 2: 2, 3: 4, 4: 4, 5: 1, 6: 0, 7: 3, 8: 4}
+# Reverse: Biodiversity foreground class id -> native OEM ids that map onto it
+BIO_FROM_OEM = {k: [n for n, b in OEM_NATIVE_TO_BIO.items() if b == k] for k in BIO_IDS}
 
-ax.hist(
-    w,
-    bins=60,
-    color="#3B8DF7",   # Settlement blue from palette
-    edgecolor="white",
-    linewidth=0.4,
-    alpha=0.85,
-)
 
-ax.axvline(stats["mean"],   color="#E05A00", linewidth=1.6, linestyle="-",  label=f'Mean = {stats["mean"]:.3f}')
-ax.axvline(stats["median"], color="#222222", linewidth=1.4, linestyle="--", label=f'Median = {stats["median"]:.3f}')
-ax.axvline(stats["p95"],    color="#888888", linewidth=1.2, linestyle=":",  label=f'95th pct = {stats["p95"]:.3f}')
+def biodiversity_distribution():
+    mask_dir = REPO_ROOT / "data/biodiversity_raw/masks"
+    paths = sorted(mask_dir.glob("*.png"))
+    if not paths:
+        raise FileNotFoundError(f"No Biodiversity masks in {mask_dir}")
+    presence = {k: 0 for k in BIO_IDS}
+    pixel_frac_sum = {k: 0.0 for k in BIO_IDS}
+    for p in paths:
+        mask = np.array(Image.open(p))
+        total = mask.size
+        for k in BIO_IDS:
+            cnt = int(np.count_nonzero(mask == k))
+            if cnt > 0:
+                presence[k] += 1
+            pixel_frac_sum[k] += cnt / total
+    n = len(paths)
+    tile_prop = np.array([presence[k] / n for k in BIO_IDS])
+    pixel_prop = np.array([pixel_frac_sum[k] / n for k in BIO_IDS])
+    print(f"Biodiversity: {n} tiles")
+    return tile_prop, pixel_prop
 
-ax.set_xlabel("Sampling weight")
-ax.set_ylabel("Number of tiles")
 
-ax.legend(frameon=True, framealpha=0.9)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
+def oem_distribution():
+    """OEM composition in the harmonised 6-class Biodiversity taxonomy (pre-training
+    mapping). Uses the same mean-per-tile-fraction definition as the Biodiversity
+    panel so the two rows are directly comparable."""
+    mask_dir = REPO_ROOT / "data/openearthmap_filtered/masks"
+    paths = sorted(mask_dir.glob("*.tif")) + sorted(mask_dir.glob("*.png"))
+    if not paths:
+        raise FileNotFoundError(f"No OpenEarthMap masks in {mask_dir}")
+    presence = {k: 0 for k in BIO_IDS}
+    pixel_frac_sum = {k: 0.0 for k in BIO_IDS}
+    for p in paths:
+        if p.suffix.lower() in (".tif", ".tiff"):
+            with rasterio.open(p) as src:
+                mask = src.read(1)
+        else:
+            mask = np.array(Image.open(p))
+        total = mask.size
+        for k in BIO_IDS:
+            natives = BIO_FROM_OEM[k]
+            cnt = int(np.isin(mask, natives).sum()) if natives else 0
+            if cnt > 0:
+                presence[k] += 1
+            pixel_frac_sum[k] += cnt / total
+    n = len(paths)
+    tile_prop = np.array([presence[k] / n for k in BIO_IDS])
+    pixel_prop = np.array([pixel_frac_sum[k] / n for k in BIO_IDS])
+    print(f"OpenEarthMap (harmonised 6-class): {n} tiles")
+    return tile_prop, pixel_prop
 
-fig.tight_layout()
-fig.savefig(OUT_PDF, dpi=300, bbox_inches="tight")
-plt.close(fig)
 
-# ---------------------------------------------------------------------------
-# Console output
-# ---------------------------------------------------------------------------
-print(f"Weights loaded:  {WEIGHTS_TSV}")
-print(f"N tiles:         {stats['n']}")
-print(f"Min / Max:       {stats['min']:.4f} / {stats['max']:.4f}")
-print(f"Mean ± Std:      {stats['mean']:.4f} ± {stats['std']:.4f}")
-print(f"Median:          {stats['median']:.4f}")
-print(f"25th / 75th pct: {stats['p25']:.4f} / {stats['p75']:.4f}")
-print(f"95th pct:        {stats['p95']:.4f}")
-print(f"\nFigure saved:    {OUT_PDF}")
-print(f"Summary stats:   see docs/robustness_analyses.md")
+def _barh(ax, ids, labels, colors, values, *, xlim, xticks, show_labels, letter, title):
+    y = np.arange(len(ids))
+    ax.barh(y, values, color=colors, edgecolor="black", linewidth=0.6)
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels if show_labels else [], fontsize=15)
+    ax.invert_yaxis()
+    ax.set_xlim(*xlim)
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    ax.set_xlabel("Proportion", fontsize=15)
+    ax.text(0.5, 1.04, f"{letter} {title}", transform=ax.transAxes,
+            ha="center", va="bottom", fontsize=15, fontweight="bold")
+    ax.grid(True, axis="x", alpha=0.25)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="x", labelsize=13)
+
+
+def main():
+    bio_tile, bio_pix = biodiversity_distribution()
+    oem_tile, oem_pix = oem_distribution()
+
+    bio_labels = [BIO_NAMES[k] for k in BIO_IDS]
+    bio_colors = [np.array(BIO_COLOR[k]) / 255.0 for k in BIO_IDS]
+
+    fig, axes = plt.subplots(
+        nrows=2, ncols=2, figsize=(11, 7.0),
+        gridspec_kw={"height_ratios": [len(BIO_IDS), len(BIO_IDS)]},
+    )
+    fig.subplots_adjust(wspace=0.18, hspace=0.85, left=0.2)
+
+    # Row 1: Biodiversity (target)
+    _barh(axes[0, 0], BIO_IDS, bio_labels, bio_colors, bio_tile,
+          xlim=(0, 1.0), xticks=[0, 0.25, 0.5, 0.75, 1.0], show_labels=True,
+          letter="(a)", title="Proportion of tiles\ncontaining each class")
+    _barh(axes[0, 1], BIO_IDS, bio_labels, bio_colors, bio_pix,
+          xlim=(0, 0.7), xticks=[0, 0.2, 0.4, 0.6], show_labels=False,
+          letter="(b)", title="Mean pixel\nproportion per class")
+    # Row 2: OpenEarthMap (auxiliary), harmonised to the same 6-class taxonomy
+    _barh(axes[1, 0], BIO_IDS, bio_labels, bio_colors, oem_tile,
+          xlim=(0, 1.0), xticks=[0, 0.25, 0.5, 0.75, 1.0], show_labels=True,
+          letter="(c)", title="Proportion of tiles\ncontaining each class")
+    _barh(axes[1, 1], BIO_IDS, bio_labels, bio_colors, oem_pix,
+          xlim=(0, 0.7), xticks=[0, 0.2, 0.4, 0.6], show_labels=False,
+          letter="(d)", title="Mean pixel\nproportion per class")
+
+    # Dataset row labels
+    fig.text(0.012, 0.74, "Biodiversity\n(target)", rotation=90,
+             ha="center", va="center", fontsize=15, fontweight="bold")
+    fig.text(0.012, 0.30, "OpenEarthMap\n(auxiliary)", rotation=90,
+             ha="center", va="center", fontsize=15, fontweight="bold")
+
+    out = REPO_ROOT / "figures" / "Figure04.pdf"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, bbox_inches="tight", pad_inches=0.05)
+    plt.close(fig)
+    print("Saved:", out)
+
+
+if __name__ == "__main__":
+    main()
