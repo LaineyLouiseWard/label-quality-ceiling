@@ -11,7 +11,7 @@ Figure types:
   - Figures 01-02 are TikZ (.tex), compiled with pdflatex and copied to figures/.
   - Figures 03-11 are Python scripts that write directly to figures/.
 
-Figures that require model checkpoints (03, 06, 08, 11) will fail loudly if
+Figures that require model checkpoints (03, 07, 08, 11) will fail loudly if
 checkpoints are missing; all others depend only on data or saved artifacts.
 """
 
@@ -84,8 +84,8 @@ def main() -> None:
         ("03", lambda: run_py(SCRIPTS_DIR / "Figure03.py", [], args.device)),
         ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
         ("05", lambda: run_py_no_device(SCRIPTS_DIR / "Figure05.py")),
-        ("06", lambda: run_py(SCRIPTS_DIR / "Figure06.py", [], args.device)),
-        ("07", lambda: run_py_no_device(SCRIPTS_DIR / "Figure07.py")),
+        ("06", lambda: run_py_no_device(SCRIPTS_DIR / "Figure06.py")),
+        ("07", lambda: run_py(SCRIPTS_DIR / "Figure07.py", [], args.device)),
         ("08", lambda: run_py(SCRIPTS_DIR / "Figure08.py", [], args.device)),
         ("09", lambda: run_py_no_device(SCRIPTS_DIR / "Figure09.py")),
         ("10", lambda: run_py_no_device(SCRIPTS_DIR / "Figure10.py")),

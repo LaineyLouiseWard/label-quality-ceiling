@@ -1,194 +1,353 @@
 #!/usr/bin/env python3
 """
-scripts/figures/Figure04.py
+Fig 7: OEM taxonomy mapping example (same as the notebook), but as a .py script.
 
-Combined class-distribution comparison of the two datasets used in this study
-(review comment C14: present the Biodiversity and OpenEarthMap distributions
-alongside each other for easier comparison).
+Panels:
+(a) RGB tile
+(b) OEM 8-class mask (raw)
+(c) OEM mask mapped to Biodiversity 6-class taxonomy (relabelled)
 
-Merges the former standalone figures:
-  - Biodiversity class-imbalance summary  (was Figure07.ipynb)
-  - filtered OpenEarthMap class distribution (was Figure02.ipynb)
+Changes vs notebook:
+- Slightly increased horizontal spacing between panels (wspace).
 
-Layout (2 rows x 2 columns); both datasets shown in the same 6-class Biodiversity
-taxonomy for a like-for-like comparison (OEM harmonised per the pre-training mapping):
-  Row 1  Biodiversity (target):    (a) tile presence   (b) mean pixel proportion
-  Row 2  OpenEarthMap (auxiliary): (c) tile presence   (d) mean pixel proportion
+Defaults target a tile that contains all 8 OEM classes:
+  data/openearthmap_raw/.../dolnoslaskie/labels/dolnoslaskie_25.tif
 
-Data:
-  data/biodiversity_raw/masks/*.png       (6-class Biodiversity taxonomy)
-  data/openearthmap_filtered/masks/*.tif  (native 8-class OEM, remapped here to 6 classes)
-
-Output:
-  figures/Figure04.pdf
+Run:
+  python scripts/figures/Figure04.py
 """
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap, BoundaryNorm, to_rgb
+from matplotlib.gridspec import GridSpec
+from matplotlib.patches import Patch, Rectangle
 from PIL import Image
 import rasterio
+
+
+# ----------------------------
+# Matplotlib styling
+# ----------------------------
+mpl.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+        "axes.titlesize": 12,
+        "legend.fontsize": 10,
+    }
+)
+
+# ----------------------------
+# OEM 8-class legend (IDs 1..8, 0 = background/unlabeled)
+# ----------------------------
+OEM8_HEX = {
+    1: "#800000",  # Bareland
+    2: "#00FF24",  # Rangeland
+    3: "#949494",  # Developed space
+    4: "#FFFFFF",  # Road
+    5: "#226126",  # Tree
+    6: "#0045FF",  # Water
+    7: "#4BB549",  # Agriculture land
+    8: "#DE1F07",  # Building
+}
+OEM8_NAMES = {
+    1: "Bareland",
+    2: "Rangeland",
+    3: "Dev. space",
+    4: "Road",
+    5: "Tree",
+    6: "Water",
+    7: "Agri. land",
+    8: "Building",
+}
+
+# ----------------------------
+# Biodiversity 6-class palette (project)
+# ----------------------------
+COLOR_MAP = {
+    0: [0, 0, 0],
+    1: [250, 62, 119],   # Forest
+    2: [168, 232, 84],   # Grassland
+    3: [242, 180, 92],   # Cropland
+    4: [59, 141, 247],   # Settlement
+    5: [255, 214, 33],   # Semi-natural
+}
+CLASS_NAMES = {
+    0: "Background",
+    1: "Forest land",
+    2: "Grassland",
+    3: "Cropland",
+    4: "Settlement",
+    5: "Semi-nat.",
+}
+
+
+# ----------------------------
+# Helpers (as per notebook)
+# ----------------------------
+def rgb_percentile_uint8(rgb_float: np.ndarray, p_lo: float = 2, p_hi: float = 98, gamma: float = 1.1) -> np.ndarray:
+    rgb = rgb_float.astype(np.float32)
+    out = np.zeros_like(rgb, dtype=np.float32)
+    for c in range(3):
+        band = rgb[..., c]
+        vals = band[np.isfinite(band)]
+        if vals.size == 0:
+            continue
+        lo, hi = np.percentile(vals, [p_lo, p_hi])
+        if hi <= lo:
+            continue
+        x = (band - lo) / (hi - lo)
+        x = np.clip(x, 0, 1)
+        x = x ** (1.0 / gamma)
+        out[..., c] = np.nan_to_num(x, nan=0.0)
+    return (out * 255).round().astype(np.uint8)
+
+
+def read_rgb_and_mpp(image_tif: Path, band_order: tuple[int, int, int] = (1, 2, 3)) -> tuple[np.ndarray, float]:
+    with rasterio.open(image_tif) as src:
+        rgb = np.transpose(src.read(list(band_order)).astype(np.float32), (1, 2, 0))
+        rgb[~np.isfinite(rgb)] = np.nan
+
+        px = abs(float(src.transform.a))
+        if src.crs is not None and src.crs.is_projected:
+            mpp_x = px
+        else:
+            cy = (src.bounds.top + src.bounds.bottom) / 2.0
+            mpp_x = px * 111320.0 * np.cos(np.deg2rad(cy))
+
+    return rgb_percentile_uint8(rgb), float(mpp_x)
+
+
+def read_mask_any(mask_path: Path) -> np.ndarray:
+    mask_path = Path(mask_path)
+    suf = mask_path.suffix.lower()
+    if suf in [".tif", ".tiff"]:
+        with rasterio.open(mask_path) as src:
+            return src.read(1)
+    if suf == ".png":
+        arr = np.array(Image.open(mask_path))
+        if arr.ndim == 3:
+            arr = arr[..., 0]
+        return arr
+    raise ValueError(f"Unsupported mask format: {mask_path}")
+
+
+def add_scale_bar_pixels(
+    ax: plt.Axes,
+    img_shape: tuple[int, int, int] | tuple[int, int],
+    meters_per_pixel: float,
+    length_m: float = 100,
+    pad_px: int = 14,
+    bar_height_px: int = 6,
+) -> None:
+    h, w = img_shape[:2]
+    bar_len_px = int(round(length_m / meters_per_pixel))
+    bar_len_px = min(bar_len_px, w - 2 * pad_px)
+    if bar_len_px < 3:
+        return
+
+    x0 = pad_px
+    y0 = h - pad_px - bar_height_px
+
+    # Solid white backing rectangle (bar + label); bbox on text covers the label area.
+    _bg = 6
+    ax.add_patch(Rectangle(
+        (x0 - _bg, y0 - _bg),
+        bar_len_px + 2 * _bg, bar_height_px + 2 * _bg,
+        facecolor="white", edgecolor="none", zorder=3,
+    ))
+    ax.add_patch(Rectangle((x0, y0), bar_len_px, bar_height_px, facecolor="black", edgecolor="black", zorder=4))
+    ax.text(
+        x0 + bar_len_px / 2,
+        y0 - 5,
+        f"{int(length_m)} m",
+        ha="center",
+        va="bottom",
+        fontsize=27,
+        zorder=5,
+        bbox=dict(facecolor="white", edgecolor="none", alpha=1.0, pad=1),
+    )
+
+
+def add_north_arrow_pixels(ax: plt.Axes, img_shape: tuple[int, int, int] | tuple[int, int], pad_px: int = 18, size_px: int = 36) -> None:
+    h, w = img_shape[:2]
+    x = w - pad_px
+    y = h - pad_px
+    ax.annotate(
+        "N",
+        xy=(x, y - size_px),
+        xytext=(x, y),
+        ha="center",
+        va="center",
+        fontsize=27,
+        fontweight="bold",
+        arrowprops=dict(arrowstyle="-|>", linewidth=1.0),
+        bbox=dict(facecolor="white", edgecolor="none", alpha=0.7, pad=1),
+    )
 
 
 def find_repo_root() -> Path:
     p = Path.cwd().resolve()
     for _ in range(10):
-        if (p / "data").is_dir() and (p / "scripts").is_dir():
+        if (p / "data").is_dir():
             return p
         if p == p.parent:
             break
         p = p.parent
-    raise RuntimeError("Could not find repo root (need data/ and scripts/).")
+    raise RuntimeError("Could not find repo root (expected to find /data).")
 
 
-REPO_ROOT = find_repo_root()
+# ----------------------------
+# Plot
+# ----------------------------
+def make_fig(rgb_tif: Path, mask8_tif: Path, mask6_png: Path, out_pdf: Path, scale_m: float = 100.0) -> None:
+    rgb8, mpp = read_rgb_and_mpp(rgb_tif)
+    mask8 = read_mask_any(mask8_tif)
+    mask6 = read_mask_any(mask6_png)
 
-mpl.rcParams.update({
-    "font.family": "serif",
-    "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
-    "mathtext.fontset": "stix",
-})
+    # OEM 8-class cmap (render 0 as black via "under"; do NOT include in legend)
+    cmap8 = ListedColormap([to_rgb(OEM8_HEX[i]) for i in range(1, 9)])
+    cmap8.set_under("black")
+    norm8 = BoundaryNorm(np.arange(0.5, 9.5, 1), cmap8.N)
 
-# -----------------------------------------------------------------------------
-# Biodiversity (target dataset) — 6-class taxonomy, 5 foreground classes plotted
-# -----------------------------------------------------------------------------
-BIO_COLOR = {
-    1: [250, 62, 119],   # Forest
-    2: [168, 232, 84],   # Grassland
-    3: [242, 180, 92],   # Cropland
-    4: [59, 141, 247],   # Settlement
-    5: [255, 214, 33],   # Semi-natural grassland
-}
-BIO_NAMES = {1: "Forest", 2: "Grassland", 3: "Cropland", 4: "Settlement", 5: "Semi-nat."}
-BIO_IDS = [1, 2, 3, 4, 5]
+    # Biodiversity 6-class cmap
+    biodiv_colors = np.array([COLOR_MAP[i] for i in range(6)]) / 255.0
+    cmap6 = ListedColormap(biodiv_colors)
+    norm6 = BoundaryNorm(np.arange(-0.5, 6.5), cmap6.N)
 
-# -----------------------------------------------------------------------------
-# OpenEarthMap (auxiliary dataset) — shown in the HARMONISED 6-class Biodiversity
-# taxonomy used during pre-training (Table "Taxonomy harmonisation", main.tex).
-# Native OEM class id -> Biodiversity class id (pre-training, hard labels):
-#   Tree(5)->Forest(1); Rangeland(2)->Grassland(2); Agriculture(7)->Cropland(3);
-#   Building(8)/Developed space(3)/Road(4)->Settlement(4);
-#   Bareland(1)+Water(6)->Background(0)  (bareland->Semi-nat only during KD).
-# No native class maps to semi-natural grassland under the pre-training mapping,
-# so OEM contributes no semi-natural exposure (an honest, informative zero).
-# -----------------------------------------------------------------------------
-OEM_NATIVE_TO_BIO = {1: 0, 2: 2, 3: 4, 4: 4, 5: 1, 6: 0, 7: 3, 8: 4}
-# Reverse: Biodiversity foreground class id -> native OEM ids that map onto it
-BIO_FROM_OEM = {k: [n for n, b in OEM_NATIVE_TO_BIO.items() if b == k] for k in BIO_IDS}
-
-
-def biodiversity_distribution():
-    mask_dir = REPO_ROOT / "data/biodiversity_raw/masks"
-    paths = sorted(mask_dir.glob("*.png"))
-    if not paths:
-        raise FileNotFoundError(f"No Biodiversity masks in {mask_dir}")
-    presence = {k: 0 for k in BIO_IDS}
-    pixel_frac_sum = {k: 0.0 for k in BIO_IDS}
-    for p in paths:
-        mask = np.array(Image.open(p))
-        total = mask.size
-        for k in BIO_IDS:
-            cnt = int(np.count_nonzero(mask == k))
-            if cnt > 0:
-                presence[k] += 1
-            pixel_frac_sum[k] += cnt / total
-    n = len(paths)
-    tile_prop = np.array([presence[k] / n for k in BIO_IDS])
-    pixel_prop = np.array([pixel_frac_sum[k] / n for k in BIO_IDS])
-    print(f"Biodiversity: {n} tiles")
-    return tile_prop, pixel_prop
-
-
-def oem_distribution():
-    """OEM composition in the harmonised 6-class Biodiversity taxonomy (pre-training
-    mapping). Uses the same mean-per-tile-fraction definition as the Biodiversity
-    panel so the two rows are directly comparable."""
-    mask_dir = REPO_ROOT / "data/openearthmap_filtered/masks"
-    paths = sorted(mask_dir.glob("*.tif")) + sorted(mask_dir.glob("*.png"))
-    if not paths:
-        raise FileNotFoundError(f"No OpenEarthMap masks in {mask_dir}")
-    presence = {k: 0 for k in BIO_IDS}
-    pixel_frac_sum = {k: 0.0 for k in BIO_IDS}
-    for p in paths:
-        if p.suffix.lower() in (".tif", ".tiff"):
-            with rasterio.open(p) as src:
-                mask = src.read(1)
-        else:
-            mask = np.array(Image.open(p))
-        total = mask.size
-        for k in BIO_IDS:
-            natives = BIO_FROM_OEM[k]
-            cnt = int(np.isin(mask, natives).sum()) if natives else 0
-            if cnt > 0:
-                presence[k] += 1
-            pixel_frac_sum[k] += cnt / total
-    n = len(paths)
-    tile_prop = np.array([presence[k] / n for k in BIO_IDS])
-    pixel_prop = np.array([pixel_frac_sum[k] / n for k in BIO_IDS])
-    print(f"OpenEarthMap (harmonised 6-class): {n} tiles")
-    return tile_prop, pixel_prop
-
-
-def _barh(ax, ids, labels, colors, values, *, xlim, xticks, show_labels, letter, title):
-    y = np.arange(len(ids))
-    ax.barh(y, values, color=colors, edgecolor="black", linewidth=0.6)
-    ax.set_yticks(y)
-    ax.set_yticklabels(labels if show_labels else [], fontsize=15)
-    ax.invert_yaxis()
-    ax.set_xlim(*xlim)
-    if xticks is not None:
-        ax.set_xticks(xticks)
-    ax.set_xlabel("Proportion", fontsize=15)
-    ax.text(0.5, 1.04, f"{letter} {title}", transform=ax.transAxes,
-            ha="center", va="bottom", fontsize=15, fontweight="bold")
-    ax.grid(True, axis="x", alpha=0.25)
-    ax.set_axisbelow(True)
-    ax.tick_params(axis="x", labelsize=13)
-
-
-def main():
-    bio_tile, bio_pix = biodiversity_distribution()
-    oem_tile, oem_pix = oem_distribution()
-
-    bio_labels = [BIO_NAMES[k] for k in BIO_IDS]
-    bio_colors = [np.array(BIO_COLOR[k]) / 255.0 for k in BIO_IDS]
-
-    fig, axes = plt.subplots(
-        nrows=2, ncols=2, figsize=(11, 7.0),
-        gridspec_kw={"height_ratios": [len(BIO_IDS), len(BIO_IDS)]},
+    # Figure layout: 3 panels + legend row (keeps panel sizes stable)
+    fig = plt.figure(figsize=(13.5*2, 8.5*2), dpi=300)
+    gs = GridSpec(
+        2,
+        3,
+        figure=fig,
+        height_ratios=[1.0, 0.28],
+        hspace=0.05,
+        wspace=0.12,  # <-- slightly increased horizontal spacing vs the notebook
     )
-    fig.subplots_adjust(wspace=0.18, hspace=0.85, left=0.2)
 
-    # Row 1: Biodiversity (target)
-    _barh(axes[0, 0], BIO_IDS, bio_labels, bio_colors, bio_tile,
-          xlim=(0, 1.0), xticks=[0, 0.25, 0.5, 0.75, 1.0], show_labels=True,
-          letter="(a)", title="Proportion of tiles\ncontaining each class")
-    _barh(axes[0, 1], BIO_IDS, bio_labels, bio_colors, bio_pix,
-          xlim=(0, 0.7), xticks=[0, 0.2, 0.4, 0.6], show_labels=False,
-          letter="(b)", title="Mean pixel\nproportion per class")
-    # Row 2: OpenEarthMap (auxiliary), harmonised to the same 6-class taxonomy
-    _barh(axes[1, 0], BIO_IDS, bio_labels, bio_colors, oem_tile,
-          xlim=(0, 1.0), xticks=[0, 0.25, 0.5, 0.75, 1.0], show_labels=True,
-          letter="(c)", title="Proportion of tiles\ncontaining each class")
-    _barh(axes[1, 1], BIO_IDS, bio_labels, bio_colors, oem_pix,
-          xlim=(0, 0.7), xticks=[0, 0.2, 0.4, 0.6], show_labels=False,
-          letter="(d)", title="Mean pixel\nproportion per class")
+    fig.subplots_adjust(bottom=0.25)
 
-    # Dataset row labels
-    fig.text(0.012, 0.74, "Biodiversity\n(target)", rotation=90,
-             ha="center", va="center", fontsize=15, fontweight="bold")
-    fig.text(0.012, 0.30, "OpenEarthMap\n(auxiliary)", rotation=90,
-             ha="center", va="center", fontsize=15, fontweight="bold")
+    ax_a = fig.add_subplot(gs[0, 0])
+    ax_b = fig.add_subplot(gs[0, 1])
+    ax_c = fig.add_subplot(gs[0, 2])
 
-    out = REPO_ROOT / "figures" / "Figure04.pdf"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, bbox_inches="tight", pad_inches=0.05)
+    leg_a = fig.add_subplot(gs[1, 0])
+    leg_b = fig.add_subplot(gs[1, 1])
+    leg_c = fig.add_subplot(gs[1, 2])
+
+    # (a) RGB
+    ax_a.imshow(rgb8)
+    ax_a.set_axis_off()
+    ax_a.text(0.5, 1.02, "(a)", transform=ax_a.transAxes, ha="center", va="bottom", fontsize=27, fontweight="bold")
+    add_scale_bar_pixels(ax_a, rgb8.shape, mpp, length_m=scale_m)
+    add_north_arrow_pixels(ax_a, rgb8.shape)
+
+    # (b) OEM 8-class
+    ax_b.imshow(mask8, cmap=cmap8, norm=norm8, interpolation="nearest", resample=False)
+    ax_b.set_axis_off()
+    ax_b.text(0.5, 1.02, "(b)", transform=ax_b.transAxes, ha="center", va="bottom", fontsize=27, fontweight="bold")
+
+    # (c) mapped 6-class
+    ax_c.imshow(mask6, cmap=cmap6, norm=norm6, interpolation="nearest", resample=False)
+    ax_c.set_axis_off()
+    ax_c.text(0.5, 1.02, "(c)", transform=ax_c.transAxes, ha="center", va="bottom", fontsize=27, fontweight="bold")
+
+    # Legends row (no effect on panel sizing)
+    for ax in (leg_a, leg_b, leg_c):
+        ax.set_axis_off()
+
+    oem_handles = [
+        Patch(
+            facecolor=to_rgb(OEM8_HEX[i]),
+            edgecolor="black" if i == 4 else "none",  # road is white -> outline
+            label=OEM8_NAMES[i],
+        )
+        for i in range(1, 9)
+    ]
+    leg_b.legend(
+        handles=oem_handles,
+        loc="center",
+        ncol=2,
+        frameon=False,
+        fontsize=28,
+        handlelength=1.2,
+        handleheight=1.0,
+        columnspacing=1.0,
+        labelspacing=0.55,
+        bbox_to_anchor=(0.5, 0.75),
+    )
+
+    # Biodiversity legend (include Background)
+    biodiv_handles = [
+        Patch(
+            facecolor=np.array(COLOR_MAP[i]) / 255.0,
+            edgecolor="black" if i == 0 else "none",  # outline helps the black swatch
+            label=CLASS_NAMES[i],
+        )
+        for i in [0, 1, 2, 3, 4, 5]
+    ]
+
+    leg_c.legend(
+        handles=biodiv_handles,
+        loc="center",
+        ncol=2,          # <-- change to 2 so it fits nicely with 6 entries
+        frameon=False,
+        fontsize=27,
+        handlelength=1.2,
+        handleheight=1.0,
+        columnspacing=1.0,
+        labelspacing=0.55,
+        bbox_to_anchor=(0.5, 0.89),
+    )
+
+
+    out_pdf = Path(out_pdf)
+    out_pdf.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_pdf, bbox_inches="tight")
     plt.close(fig)
-    print("Saved:", out)
+    print("Saved:", out_pdf)
+
+
+def parse_args() -> argparse.Namespace:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--rgb-tif", type=str, default=None)
+    ap.add_argument("--mask8-tif", type=str, default=None)
+    ap.add_argument("--mask6-png", type=str, default=None)
+    ap.add_argument("--out", type=str, default=None)
+    ap.add_argument("--scale-m", type=float, default=100.0)
+    return ap.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    repo = find_repo_root()
+
+    # Default: daressalaam_28 (contains all 8 OEM classes)
+    region = "dolnoslaskie"
+    raw_tile = "dolnoslaskie_25"
+    relab_tile = f"oem_{region}_{raw_tile}"
+
+    rgb_tif = Path(args.rgb_tif) if args.rgb_tif else repo / f"data/openearthmap_relabelled/images/{relab_tile}.tif"
+    mask6_png = Path(args.mask6_png) if args.mask6_png else repo / f"data/openearthmap_relabelled/masks/{relab_tile}.png"
+    mask8_tif = Path(args.mask8_tif) if args.mask8_tif else repo / (
+        f"data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/{region}/labels/{raw_tile}.tif"
+    )
+    out_pdf = Path(args.out) if args.out else repo / "figures/Figure04.pdf"
+
+    for p in [rgb_tif, mask6_png, mask8_tif]:
+        if not p.exists():
+            raise FileNotFoundError(p)
+
+    make_fig(rgb_tif=rgb_tif, mask8_tif=mask8_tif, mask6_png=mask6_png, out_pdf=out_pdf, scale_m=args.scale_m)
 
 
 if __name__ == "__main__":
