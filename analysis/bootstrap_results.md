@@ -148,6 +148,6 @@ Resamples: 2000 | Seed: 42 | Level: 95%
 - **ΔOA**: +3.4%  (individual CI widths: ±1.2%, ±0.6%)
 
 ## Stage 1→5 improvement (test)
-- **ΔmIoU**: +10.5%  (individual CI widths: ±3.6%, ±2.2%)
+- **ΔmIoU**: +10.5% raw (+10.6 pp from rounded endpoints, as reported in the manuscript)  (individual CI widths: ±3.6%, ±2.2%)
 - **ΔmF1**: +7.0%  (individual CI widths: ±2.7%, ±1.3%)
 - **ΔOA**: +4.2%  (individual CI widths: ±1.6%, ±0.8%)

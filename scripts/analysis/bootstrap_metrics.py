@@ -252,10 +252,15 @@ def main():
             lines.append(f"## Stage 1→5 improvement ({split})")
             for metric in ("mIoU", "mF1", "OA"):
                 delta = s5["point"][metric] - s1["point"][metric]
+                # Delta of values rounded to 1 dp -- the convention used in the manuscript
+                # tables, where per-class/mean deltas are differences of the displayed rounded
+                # cells. This can differ from the raw delta by up to ~0.1 pp due to endpoint
+                # rounding (e.g. test mIoU: raw +10.5 vs rounded-endpoint +10.6).
+                delta_rounded = round(s5["point"][metric] * 100, 1) - round(s1["point"][metric] * 100, 1)
                 # Width of individual CIs as proxy for uncertainty
                 w1 = s1["ci_95"][metric][1] - s1["ci_95"][metric][0]
                 w5 = s5["ci_95"][metric][1] - s5["ci_95"][metric][0]
-                lines.append(f"- **Δ{metric}**: +{delta:.1%}  (individual CI widths: ±{w1/2:.1%}, ±{w5/2:.1%})")
+                lines.append(f"- **Δ{metric}**: +{delta:.1%} raw (+{delta_rounded:.1f} pp from rounded endpoints, as reported in the manuscript)  (individual CI widths: ±{w1/2:.1%}, ±{w5/2:.1%})")
             lines.append("")
 
     md_path.write_text("\n".join(lines))
