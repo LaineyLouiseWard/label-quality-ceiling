@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -83,6 +84,11 @@ def load_checkpoint_into_model(
             else:
                 net_sd[k] = v
 
+    # Checkpoints saved from a torch.compile'd model carry an "_orig_mod." prefix on every key.
+    # Strip it so they match the (uncompiled) eval module — otherwise the load silently fails
+    # (strict=False) and metrics would be computed on random weights.
+    net_sd = {k.replace("_orig_mod.", "", 1): v for k, v in net_sd.items()}
+
     missing, unexpected = model.load_state_dict(net_sd, strict=False)
 
     if missing:
@@ -116,6 +122,42 @@ def _apply_ignore_mask(
 
 
 @torch.no_grad()
+def tta_predict(model, images, scales, flips, softmax):
+    """Test-time augmentation: multi-scale + flips, averaging SOFTMAX PROBABILITIES
+    (not logits), then argmax. Geometric transforms are inverted and maps resized
+    back to the original size before averaging so everything aligns.
+
+    flips: string containing any of 'h' (horizontal) / 'v' (vertical). Empty = none.
+    Standard, defensible TTA (cf. docs/MANUSCRIPT_IMPLICATIONS_NOREP.md §15).
+    """
+    N, C, H, W = images.shape
+    flip_modes = [()]            # () = no flip
+    if "h" in flips:
+        flip_modes.append((3,))  # width axis
+    if "v" in flips:
+        flip_modes.append((2,))  # height axis
+
+    prob_sum = None
+    n = 0
+    for s in scales:
+        if abs(s - 1.0) < 1e-6:
+            scaled = images
+        else:
+            h2, w2 = int(round(H * s)), int(round(W * s))
+            scaled = F.interpolate(images, size=(h2, w2), mode="bilinear", align_corners=False)
+        for dims in flip_modes:
+            inp = torch.flip(scaled, dims=dims) if dims else scaled
+            prob = softmax(model(inp))
+            if dims:
+                prob = torch.flip(prob, dims=dims)
+            if prob.shape[-2:] != (H, W):
+                prob = F.interpolate(prob, size=(H, W), mode="bilinear", align_corners=False)
+            prob_sum = prob if prob_sum is None else prob_sum + prob
+            n += 1
+    return (prob_sum / n).argmax(dim=1).cpu().numpy()
+
+
+@torch.no_grad()
 def evaluate_checkpoint(
     ckpt_path: Path,
     data_root: Path,
@@ -124,6 +166,9 @@ def evaluate_checkpoint(
     ignore_index: int | None,
     batch_size: int = 1,
     num_workers: int = 0,
+    tta: bool = False,
+    tta_scales: tuple = (1.0,),
+    tta_flips: str = "",
 ) -> Tuple[dict, np.ndarray]:
     model = build_model(num_classes=6).to(device)
     model = load_checkpoint_into_model(model, ckpt_path, device)
@@ -153,8 +198,11 @@ def evaluate_checkpoint(
         images = batch["img"].to(device)
         masks = batch["gt_semantic_seg"].cpu().numpy()  # (B,H,W)
 
-        outputs = model(images)
-        preds = softmax(outputs).argmax(dim=1).cpu().numpy()  # (B,H,W)
+        if tta:
+            preds = tta_predict(model, images, tta_scales, tta_flips, softmax)  # (B,H,W)
+        else:
+            outputs = model(images)
+            preds = softmax(outputs).argmax(dim=1).cpu().numpy()  # (B,H,W)
 
         for true, pred in zip(masks, preds):
             t_flat, p_flat = _apply_ignore_mask(true, pred, ignore_index)
@@ -177,6 +225,9 @@ def evaluate_checkpoint(
         "data_root": str(data_root),
         "date": datetime.datetime.now().isoformat(timespec="seconds"),
         "ignore_index": ignore_index,
+        "tta": bool(tta),
+        "tta_scales": list(tta_scales) if tta else None,
+        "tta_flips": tta_flips if tta else None,
         "OA": oa,
         "mIoU_excluding_bg": miou,
         "mF1_excluding_bg": mf1,
@@ -257,7 +308,19 @@ def main() -> None:
     )
     ap.add_argument("--force", action="store_true",
                     help="Overwrite existing evaluation outputs without prompting.")
+    ap.add_argument("--tta", action="store_true",
+                    help="Enable test-time augmentation (multi-scale + flips, softmax-averaged). "
+                         "OFF by default — single-pass eval is unchanged. Use a separate --out-dir for TTA runs.")
+    ap.add_argument("--tta-scales", type=str, default="0.75,1.0,1.25",
+                    help="Comma-separated scales for TTA (only used with --tta).")
+    ap.add_argument("--tta-flips", type=str, default="hv",
+                    help="Flips for TTA: any of 'h'/'v' (e.g. 'hv', 'h', ''). Only used with --tta.")
     args = ap.parse_args()
+
+    tta_scales = tuple(float(s) for s in args.tta_scales.split(",")) if args.tta else (1.0,)
+    tta_flips = args.tta_flips.lower() if args.tta else ""
+    if args.tta:
+        logging.info(f"TTA ENABLED: scales={tta_scales}, flips='{tta_flips}' (softmax-averaged)")
 
     base_dir = Path(args.base_dir).resolve()
     data_root = Path(args.data_root).resolve()
@@ -298,6 +361,9 @@ def main() -> None:
             ignore_index=args.ignore_index,
             batch_size=1,
             num_workers=args.num_workers,
+            tta=args.tta,
+            tta_scales=tta_scales,
+            tta_flips=tta_flips,
         )
 
         with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:

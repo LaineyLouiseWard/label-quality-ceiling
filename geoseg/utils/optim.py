@@ -112,9 +112,16 @@ class Lookahead(Optimizer):
         self.fast_state = self.optimizer.state
         for group in self.param_groups:
             group["counter"] = 0
-        # Add these lines in the __init__ method of Lookahead class
-        self._optimizer_step_pre_hooks = getattr(optimizer, '_optimizer_step_pre_hooks', {})
-        self._optimizer_step_post_hooks = getattr(optimizer, '_optimizer_step_post_hooks', {})
+        # Lookahead does not call super().__init__(), so the hook registries the base
+        # torch.optim.Optimizer sets up are absent. Newer PyTorch's state_dict()/load_state_dict()
+        # iterate these, so resuming (trainer.fit(ckpt_path=...)) crashes without them. Mirror the
+        # step-hook pattern and add the (empty) state-dict hook registries. No effect on optimisation.
+        self._optimizer_step_pre_hooks = getattr(optimizer, '_optimizer_step_pre_hooks', collections.OrderedDict())
+        self._optimizer_step_post_hooks = getattr(optimizer, '_optimizer_step_post_hooks', collections.OrderedDict())
+        self._optimizer_state_dict_pre_hooks = collections.OrderedDict()
+        self._optimizer_state_dict_post_hooks = collections.OrderedDict()
+        self._optimizer_load_state_dict_pre_hooks = collections.OrderedDict()
+        self._optimizer_load_state_dict_post_hooks = collections.OrderedDict()
 
     def update(self, group):
         """@TODO: Docs. Contribution is welcome."""

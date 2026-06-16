@@ -69,6 +69,10 @@ class SupervisionTrain(pl.LightningModule):
         self.config = config
 
         self.net = config.net
+        # NOTE: torch.compile is applied in main() AFTER pretrained weights are loaded.
+        # Compiling here would prefix every param with "_orig_mod." so the (un-prefixed)
+        # pretrained checkpoint would silently fail to load (strict=False) and the model
+        # would train from random init. See main().
         self.loss = config.loss
         self.classes = config.classes
 
@@ -172,6 +176,10 @@ def _load_student_weights_from_pl_ckpt(model: nn.Module, ckpt_path: str):
         for k, v in ckpt["state_dict"].items()
         if k.startswith("net.")
     }
+    # Checkpoints saved from a torch.compile'd model carry an "_orig_mod." prefix on every key.
+    # Strip it so they match the (uncompiled) target module — otherwise the load silently fails
+    # (strict=False) and the model trains from random init. See compile note in main().
+    sd = {k.replace("_orig_mod.", "", 1): v for k, v in sd.items()}
 
     missing, unexpected = model.load_state_dict(sd, strict=False)
     print("Loaded pretrained student weights.")
@@ -201,18 +209,41 @@ def main():
 
     model = SupervisionTrain(config)
 
-    if getattr(config, "pretrained_ckpt_path", None):
+    # --- Resume / fresh-run logic -------------------------------------------------------------
+    # An interrupted run leaves a resumable "last.ckpt" (full model + optimizer + scheduler + epoch
+    # state). Re-running the SAME command picks up from where it stopped automatically; --force wipes
+    # both checkpoints and starts fresh. NOTE: resume MUST use the same TORCH_COMPILE setting as the
+    # interrupted run (compile prefixes param names with "_orig_mod.", so the saved keys must match).
+    weights_dir = Path(config.weights_path)
+    best_ckpt = weights_dir / f"{config.weights_name}.ckpt"
+    last_ckpt = weights_dir / "last.ckpt"
+
+    if args.force:
+        for p in (best_ckpt, last_ckpt):
+            if p.exists():
+                p.unlink()
+                print(f"[force] Removed existing checkpoint: {p}")
+
+    resume_from = str(last_ckpt) if (last_ckpt.exists() and not args.force) else None
+    if resume_from:
+        print(f"[resume] Resuming from {last_ckpt} (epoch/optimizer/scheduler state restored).")
+    elif best_ckpt.exists() and not args.force:
+        raise FileExistsError(
+            f"Completed checkpoint exists but no resumable last.ckpt: {best_ckpt}\n"
+            "Pass --force to restart from scratch."
+        )
+
+    # Load pretrained weights ONLY for a fresh run. On resume, Lightning restores the full model
+    # state from last.ckpt, so loading pretrained over it would corrupt the resume.
+    if resume_from is None and getattr(config, "pretrained_ckpt_path", None):
         _load_student_weights_from_pl_ckpt(model.net, config.pretrained_ckpt_path)
 
-    ckpt_out = Path(config.weights_path) / f"{config.weights_name}.ckpt"
-    if ckpt_out.exists() and not args.force:
-        raise FileExistsError(
-            f"Checkpoint already exists: {ckpt_out}\n"
-            "Pass --force to overwrite."
-        )
-    if ckpt_out.exists() and args.force:
-        ckpt_out.unlink()
-        print(f"[force] Removed existing checkpoint: {ckpt_out}")
+    # Opt-in torch.compile (set TORCH_COMPILE=1), AFTER the pretrained load so checkpoint
+    # keys match (compile prefixes params with "_orig_mod."). ~10-20% speedup from epoch 2.
+    # If it OOMs/graph-breaks it fails in epoch 1 -> just unset the var and rerun.
+    if os.environ.get("TORCH_COMPILE") == "1":
+        model.net = torch.compile(model.net)
+        print("[torch.compile] student compiled (post-load).")
 
     checkpoint_cb = ModelCheckpoint(
         dirpath=config.weights_path,
@@ -220,7 +251,7 @@ def main():
         monitor=config.monitor,
         mode=config.monitor_mode,
         save_top_k=config.save_top_k,
-        save_last=config.save_last,
+        save_last=True,   # always write last.ckpt so an interrupted run can resume
     )
 
     extra_callbacks = getattr(config, "callbacks", []) or []
@@ -245,7 +276,7 @@ def main():
         f"Checkpoint monitor must be 'val_mIoU' (foreground-only mIoU). Got: '{config.monitor}'"
     )
 
-    trainer.fit(model, config.train_loader, config.val_loader)
+    trainer.fit(model, config.train_loader, config.val_loader, ckpt_path=resume_from)
 
 
 if __name__ == "__main__":
