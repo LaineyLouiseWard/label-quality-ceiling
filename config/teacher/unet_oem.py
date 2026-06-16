@@ -79,7 +79,7 @@ train_dataset = OpenEarthMapTeacherTrainDataset(
     img_dir="images",
     mask_dir="masks",
     img_suffix=".tif",
-    mask_suffix=".png",
+    mask_suffix=".tif",  # native OEM masks (labels 0..8)
 )
 
 val_dataset = OpenEarthMapTeacherValDataset(
@@ -87,7 +87,7 @@ val_dataset = OpenEarthMapTeacherValDataset(
     img_dir="images",
     mask_dir="masks",
     img_suffix=".tif",
-    mask_suffix=".png",
+    mask_suffix=".tif",  # native OEM masks (labels 0..8)
 )
 
 # Sanity check: fail fast if teacher data is missing

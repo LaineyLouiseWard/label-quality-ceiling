@@ -132,7 +132,6 @@ dependencies:
       - jupyterlab-pygments==0.3.0
       - kiwisolver==1.4.9
       - lazy-loader==0.4
-      - lightning==2.0.0
       - lightning-cloud==0.6.0
       - lightning-utilities==0.15.2
       - markdown==3.10

@@ -28,18 +28,11 @@ from typing import Dict
 
 from scripts.data_prep.convert_oem_masks import convert_oem_mask_tif_to_png
 
-# OEM 8-class IDs (1..8) -> Biodiversity 6-class IDs (0..5)
-OEM_ID_TO_TARGET6: Dict[int, int] = {
-    0: 0,  # (if any background/no-data appears)
-    1: 0,  # Bareland -> background
-    2: 2,  # Rangeland -> grassland
-    3: 4,  # Developed space -> settlement
-    4: 4,  # Road -> settlement
-    5: 1,  # Tree -> forest
-    6: 0,  # Water -> background
-    7: 3,  # Agriculture land -> cropland
-    8: 4,  # Building -> settlement
-}
+# OEM native IDs (0..8) -> Biodiversity 6-class IDs (0..5), PRE-TRAINING (hard-label) column.
+# Single source of truth: geoseg/taxonomy.OEM_TO_STUDENT_PRETRAIN.
+from geoseg.taxonomy import OEM_TO_STUDENT_PRETRAIN
+
+OEM_ID_TO_TARGET6: Dict[int, int] = dict(OEM_TO_STUDENT_PRETRAIN)
 
 
 def ensure_dir(p: Path) -> None:

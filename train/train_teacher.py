@@ -64,16 +64,12 @@ class TeacherTrain(pl.LightningModule):
         self.train_evaluator = Evaluator(len(self.classes), ignore_index=ignore_index)
         self.val_evaluator = Evaluator(len(self.classes), ignore_index=ignore_index)
 
-        self._train_cache = []
-        self._val_cache = []
-
     def forward(self, x):
         return self.net(x)
 
     # ---------------- TRAIN ----------------
     def on_train_epoch_start(self):
         self.train_evaluator.reset()
-        self._train_cache.clear()
 
     def training_step(self, batch, batch_idx):
         img = batch["img"]
@@ -83,20 +79,17 @@ class TeacherTrain(pl.LightningModule):
         loss = self.loss(logits, mask)
         pred = torch.argmax(logits, dim=1)
 
-        self._train_cache.append(
-            {
-                "pred": pred.detach().cpu().numpy(),
-                "target": mask.detach().cpu().numpy(),
-            }
+        # Accumulate metrics incrementally (matches train_supervision). Caching every batch's
+        # pred+target for the whole epoch held ~15 GB host RAM and OOM-killed B7.
+        self.train_evaluator.add_batch(
+            mask.detach().cpu().numpy(),
+            pred.detach().cpu().numpy(),
         )
 
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def on_train_epoch_end(self):
-        for o in self._train_cache:
-            self.train_evaluator.add_batch(o["target"], o["pred"])
-
         iou = self.train_evaluator.Intersection_over_Union()
         f1 = self.train_evaluator.F1()
         oa = self.train_evaluator.OA()
@@ -110,7 +103,6 @@ class TeacherTrain(pl.LightningModule):
     # ---------------- VAL ----------------
     def on_validation_epoch_start(self):
         self.val_evaluator.reset()
-        self._val_cache.clear()
 
     def validation_step(self, batch, batch_idx):
         img = batch["img"]
@@ -120,20 +112,15 @@ class TeacherTrain(pl.LightningModule):
         loss = self.loss(logits, mask)
         pred = torch.argmax(logits, dim=1)
 
-        self._val_cache.append(
-            {
-                "pred": pred.detach().cpu().numpy(),
-                "target": mask.detach().cpu().numpy(),
-            }
+        self.val_evaluator.add_batch(
+            mask.detach().cpu().numpy(),
+            pred.detach().cpu().numpy(),
         )
 
         self.log("val_loss", loss, on_epoch=True, prog_bar=True)
         return loss
 
     def on_validation_epoch_end(self):
-        for o in self._val_cache:
-            self.val_evaluator.add_batch(o["target"], o["pred"])
-
         iou = self.val_evaluator.Intersection_over_Union()
         f1 = self.val_evaluator.F1()
         oa = self.val_evaluator.OA()

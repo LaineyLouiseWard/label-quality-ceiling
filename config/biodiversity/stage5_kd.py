@@ -137,19 +137,28 @@ hard_loss = JointLoss(
 
 
 class KDLoss(nn.Module):
-    def __init__(self, hard_loss: nn.Module, kd_helper: KDHelper, alpha: float):
+    def __init__(self, hard_loss: nn.Module, kd_helper: KDHelper, alpha: float,
+                 ignore_index: int = 0):
         super().__init__()
         self.hard_loss = hard_loss
         self.kd_helper = kd_helper
         self.alpha = alpha
+        self.ignore_index = ignore_index
 
     def forward(self, student_logits, targets, teacher_logits):
         loss_hard = self.hard_loss(student_logits, targets)
-        loss_kd = self.kd_helper.compute_kd_loss(student_logits, teacher_logits)
+        # KD is applied only on non-ignored (foreground) pixels, matching the hard loss's
+        # ignore_index, so background (outside the farm extent) is excluded from ALL
+        # optimisation and the KD budget stays focused on the foreground classes.
+        kd_map = self.kd_helper.compute_kd_loss(
+            student_logits, teacher_logits, reduction="none"
+        ).sum(dim=1)  # (N, H, W): KL summed over classes per pixel
+        valid = (targets != self.ignore_index)
+        loss_kd = (kd_map * valid).sum() / valid.sum().clamp(min=1)
         return (1.0 - self.alpha) * loss_hard + self.alpha * loss_kd
 
 
-loss = KDLoss(hard_loss, kd_helper, alpha=kd_alpha)
+loss = KDLoss(hard_loss, kd_helper, alpha=kd_alpha, ignore_index=ignore_index)
 use_aux_loss = False
 
 
@@ -193,10 +202,22 @@ with open(weights_path_tsv, "r", encoding="utf-8") as f:
         img_id, w = line.split("\t")
         id_to_weight[img_id] = float(w)
 
+
+def _norm_id(x):
+    # The TSV is keyed by BASE id (build_stage4_weights strips _repN so replicas share
+    # their base weight). Replicated tiles in train_rep carry a _repN suffix, so we must
+    # strip it before the lookup or all 800 replicas silently default to weight 1.0.
+    if "_rep" in x:
+        b, r = x.rsplit("_rep", 1)
+        if r.isdigit():
+            return b
+    return x
+
+
 sample_weights = []
 missing = 0
 for img_id in train_dataset.img_ids:
-    w = id_to_weight.get(img_id, None)
+    w = id_to_weight.get(_norm_id(img_id), None)
     if w is None:
         sample_weights.append(1.0)
         missing += 1
@@ -205,7 +226,10 @@ for img_id in train_dataset.img_ids:
 
 print(f"[Stage5 KD] Loaded weights for {len(id_to_weight)} ids. Missing={missing}/{len(train_dataset.img_ids)}")
 if missing > 0:
-    print("[Stage5 KD][WARN] Some train ids missing weights; defaulted to 1.0. Check ID alignment.")
+    raise RuntimeError(
+        f"[Stage5 KD] {missing}/{len(train_dataset.img_ids)} train ids have no sampling weight "
+        "(ID alignment broken). Refusing to train with silently mis-weighted sampling."
+    )
 
 sampler = WeightedRandomSampler(
     weights=sample_weights,

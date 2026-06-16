@@ -4,7 +4,6 @@
 data/
 pretrain_weights/
 model_weights/
-artifacts/
 bin/
 docs/
 
@@ -49,6 +48,11 @@ main_proposed.tex
 # --------------------
 CLAUDE.md
 .claude/
+
+# --------------------
+# Editor
+# --------------------
+.vscode/
 
 # --------------------
 # OS

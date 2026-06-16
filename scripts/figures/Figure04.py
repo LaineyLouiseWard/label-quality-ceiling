@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fig 7: OEM taxonomy mapping example (same as the notebook), but as a .py script.
+Fig 4: OEM taxonomy mapping example (same as the notebook), but as a .py script.
 
 Panels:
 (a) RGB tile

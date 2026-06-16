@@ -33,23 +33,11 @@ from geoseg.datasets.transform import Compose, RandomScale, SmartCropV1, SmartCr
 
 ORIGIN_IMG_SIZE: Tuple[int, int] = (512, 512)
 
-CLASSES = (
-    "Background",
-    "Forest",
-    "Grassland",
-    "Cropland",
-    "Settlement",
-    "Seminatural",
-)
+# Canonical student taxonomy — single source of truth in geoseg/taxonomy.py.
+from geoseg.taxonomy import STUDENT_CLASSES, STUDENT_PALETTE
 
-PALETTE = [
-    [0, 0, 0],
-    [250, 62, 119],
-    [168, 232, 84],
-    [242, 180, 92],
-    [59, 141, 247],
-    [255, 214, 33],
-]
+CLASSES = STUDENT_CLASSES
+PALETTE = STUDENT_PALETTE
 
 
 # -----------------------------------------------------------------------------

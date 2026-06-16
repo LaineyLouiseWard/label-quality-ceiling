@@ -94,7 +94,7 @@ Individual figures:
 
 ```bash
 python scripts/figures/Figure03.py          # RGB tile examples (data only)
-python scripts/figures/Figure04.py          # Dataset class-distribution comparison (data only)
+python scripts/figures/Figure04.py          # OpenEarthMap taxonomy-harmonisation example (data only)
 python scripts/figures/Figure09.py          # Confusion matrices (artifacts only)
 python scripts/figures/Figure10.py          # Per-class IoU (metrics only)
 python scripts/figures/Figure11.py          # KD pixel transitions

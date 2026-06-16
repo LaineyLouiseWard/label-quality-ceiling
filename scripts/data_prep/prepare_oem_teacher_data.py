@@ -117,6 +117,39 @@ def find_pairs(raw_root: Path) -> List[Tuple[Path, Path]]:
     return pairs
 
 
+def partition_by_official_split(
+    pairs: List[Tuple[Path, Path]], raw_root: Path
+) -> Tuple[List[Tuple[Path, Path]], List[Tuple[Path, Path]], int]:
+    """
+    Partition (image, label) pairs using OEM's official train.txt / val.txt (matched by filename).
+
+    The split files list one tile filename per line (e.g. 'aachen_1.tif'). Pairs whose filename
+    is in train.txt go to train, those in val.txt go to val; anything else (e.g. test tiles, or
+    xBD tiles whose image is absent so they never appear in `pairs`) is dropped. This gives a
+    deterministic, portable, standard split — independent of filesystem iteration order.
+    """
+    raw_root = Path(raw_root)
+    train_txt, val_txt = raw_root / "train.txt", raw_root / "val.txt"
+    if not (train_txt.exists() and val_txt.exists()):
+        raise FileNotFoundError(
+            f"--official-split was set but {train_txt} and/or {val_txt} were not found under {raw_root}."
+        )
+
+    def _names(p: Path) -> set:
+        return {ln.strip() for ln in p.read_text().splitlines() if ln.strip()}
+
+    train_names, val_names = _names(train_txt), _names(val_txt)
+    train_pairs, val_pairs, dropped = [], [], 0
+    for img_p, mask_p in pairs:
+        if img_p.name in train_names:
+            train_pairs.append((img_p, mask_p))
+        elif img_p.name in val_names:
+            val_pairs.append((img_p, mask_p))
+        else:
+            dropped += 1
+    return train_pairs, val_pairs, dropped
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -154,6 +187,11 @@ def main() -> None:
         action="store_true",
         help="Delete existing out-root before writing.",
     )
+    ap.add_argument(
+        "--official-split",
+        action="store_true",
+        help="Use OEM's official train.txt/val.txt (under --raw-root) instead of a random split.",
+    )
     args = ap.parse_args()
 
     raw_root: Path = args.raw_root
@@ -172,13 +210,21 @@ def main() -> None:
             "Expected either raw_root/<region>/{images,labels} OR raw_root/{images,masks|labels}."
         )
 
-    rng = random.Random(args.seed)
-    rng.shuffle(pairs)
-
-    n_val = int(round(len(pairs) * args.val_frac))
-    n_val = max(1, min(n_val, len(pairs) - 1))  # guard against empty split
-    val_pairs = pairs[:n_val]
-    train_pairs = pairs[n_val:]
+    if args.official_split:
+        train_pairs, val_pairs, dropped = partition_by_official_split(pairs, raw_root)
+        if not train_pairs or not val_pairs:
+            raise RuntimeError(
+                "Official split produced an empty train or val set — check train.txt/val.txt."
+            )
+        split_desc = f"official train.txt/val.txt ({dropped} pairs not listed, dropped)"
+    else:
+        rng = random.Random(args.seed)
+        rng.shuffle(pairs)
+        n_val = int(round(len(pairs) * args.val_frac))
+        n_val = max(1, min(n_val, len(pairs) - 1))  # guard against empty split
+        val_pairs = pairs[:n_val]
+        train_pairs = pairs[n_val:]
+        split_desc = f"random (seed={args.seed}, val-frac={args.val_frac})"
 
     ensure_clean_out_root(out_root, overwrite=args.overwrite)
     ensure_dirs(out_root)
@@ -201,8 +247,8 @@ def main() -> None:
     print(f"  raw-root: {raw_root}")
     print(f"  out-root: {out_root.resolve()}")
     print(f"  mode:     {args.mode}")
-    print(f"  seed:     {args.seed}")
-    print(f"  split:    train={len(train_pairs)}, val={len(val_pairs)} (val-frac={args.val_frac})")
+    print(f"  split:    {split_desc}")
+    print(f"  counts:   train={len(train_pairs)}, val={len(val_pairs)}")
 
 
 if __name__ == "__main__":

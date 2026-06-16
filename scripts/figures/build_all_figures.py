@@ -11,8 +11,10 @@ Figure types:
   - Figures 01-02 are TikZ (.tex), compiled with pdflatex and copied to figures/.
   - Figures 03-11 are Python scripts that write directly to figures/.
 
-Figures that require model checkpoints (03, 07, 08, 11) will fail loudly if
+Figures that require model checkpoints (07, 08, 11) will fail loudly if
 checkpoints are missing; all others depend only on data or saved artifacts.
+Figures 03 and 07 take no --device argument (03 is data-only; 07 hardcodes
+cuda with a CPU fallback), so they are launched without it.
 """
 
 from __future__ import annotations
@@ -81,11 +83,11 @@ def main() -> None:
     figures: list[tuple[str, callable]] = [
         ("01", lambda: run_tex(SCRIPTS_DIR / "Figure01.tex")),
         ("02", lambda: run_tex(SCRIPTS_DIR / "Figure02.tex")),
-        ("03", lambda: run_py(SCRIPTS_DIR / "Figure03.py", [], args.device)),
+        ("03", lambda: run_py_no_device(SCRIPTS_DIR / "Figure03.py")),
         ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
         ("05", lambda: run_py_no_device(SCRIPTS_DIR / "Figure05.py")),
         ("06", lambda: run_py_no_device(SCRIPTS_DIR / "Figure06.py")),
-        ("07", lambda: run_py(SCRIPTS_DIR / "Figure07.py", [], args.device)),
+        ("07", lambda: run_py_no_device(SCRIPTS_DIR / "Figure07.py")),
         ("08", lambda: run_py(SCRIPTS_DIR / "Figure08.py", [], args.device)),
         ("09", lambda: run_py_no_device(SCRIPTS_DIR / "Figure09.py")),
         ("10", lambda: run_py_no_device(SCRIPTS_DIR / "Figure10.py")),

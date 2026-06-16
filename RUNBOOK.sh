@@ -2,6 +2,16 @@
 set -euo pipefail
 unset CUDA_VISIBLE_DEVICES
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
+# Reduce CUDA fragmentation OOM on the 8 GB laptop GPU (pure stability; no result change).
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+# Fail fast (with the fix) if the active 'python' lacks PyTorch — i.e. the conda env is not active.
+if ! python -c "import torch" >/dev/null 2>&1; then
+  echo "ERROR: active 'python' has no PyTorch — the ClassImbalance conda env is not activated."
+  echo "  Fix:  conda activate ClassImbalance   (then re-run bash RUNBOOK.sh)"
+  echo "  Or:   PATH=\"\$HOME/miniconda3/envs/ClassImbalance/bin:\$PATH\" bash RUNBOOK.sh"
+  exit 1
+fi
 
 # ====================================================================
 # Full reproducibility pipeline
@@ -9,8 +19,9 @@ export CUDA_DEVICE_ORDER=PCI_BUS_ID
 # Usage:
 #   bash RUNBOOK.sh              # run everything from A1
 #   bash RUNBOOK.sh --from B7    # resume from stage B7 onward
+#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh   # ALSO run the optional N4/N5 attribution null controls
 #
-# Valid stages: A1-A8, B1-B9, C1-C4, D, E
+# Valid stages: A0 (taxonomy check), A1-A8, B1-B9, N4-N5 (optional null controls), C1-C4, D, E
 #
 # Overwrite flags:
 #   --overwrite  (data-prep scripts)
@@ -22,7 +33,7 @@ BIO_RAW=data/biodiversity_raw
 OEM_RAW=data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD
 
 # ---- Parse --from argument ----
-FROM_STAGE="A1"
+FROM_STAGE="A0"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from) FROM_STAGE="$2"; shift 2 ;;
@@ -31,7 +42,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Ordered list of all stages
-STAGES=(A1 A2 A3 A4 A5 A6 A7 A8 B1 B2 B3 B4 B5 B6 B7 B8 B9 C1 C2 C3 C4 D E)
+STAGES=(A0 A1 A2 A3 A4 A5 A6 A7 A8 B1 B2 B3 B4 B5 B6 B7 B8 B9 N4 N5 C1 C2 C3 C4 D E)
 
 # Validate --from value
 valid=false
@@ -85,6 +96,14 @@ echo "================================================================"
 echo " PIPELINE -- running from stage $FROM_STAGE onward"
 echo "================================================================"
 echo ""
+
+# ======================== A0. PRE-FLIGHT CHECK =======================
+
+if run_stage A0; then
+  echo "[A0] Verifying taxonomy consistency (class orders / OEM->student KD mapping)"
+  # Aborts the whole run (set -e) if any class order/index has drifted from geoseg/taxonomy.py.
+  PYTHONPATH=. python scripts/verify_taxonomy_consistency.py
+fi
 
 # ======================== A. DATA PREPARATION ========================
 
@@ -154,12 +173,15 @@ if run_stage A7; then
 fi
 
 if run_stage A8; then
-  require_nonempty data/openearthmap_relabelled_filtered/masks A6
-  echo "[A8] Preparing OEM teacher training split"
+  require_nonempty "$OEM_RAW" A4
+  echo "[A8] Preparing OEM teacher training split (FULL OEM, native 9-class taxonomy)"
+  # Teacher trains on the FULL OEM (~3,500 tiles), NOT the rural-filtered subset:
+  # the rural filter strips settlement-rich tiles, which would weaken the very
+  # minority-class signal KD injects. Native labels 0..8 are preserved.
   PYTHONPATH=. python scripts/data_prep/prepare_oem_teacher_data.py \
-    --raw-root data/openearthmap_relabelled_filtered \
+    --raw-root "$OEM_RAW" \
     --out-root data/openearthmap_teacher \
-    --seed 42 \
+    --official-split \
     --overwrite
 fi
 
@@ -227,14 +249,46 @@ if run_stage B8; then
     --ckpt model_weights/teacher/teacher.ckpt \
     --out  pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
     --force
+  echo "[B8] Verifying exported teacher outputs native-A channels (gate before KD)"
+  # Aborts the run (set -e) if the teacher is not native-A — e.g. a stale 6-class checkpoint.
+  PYTHONPATH=. python scripts/verify_teacher_channels.py \
+    --ckpt pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
+    --data-root data/openearthmap_teacher/val
 fi
 
 if run_stage B9; then
   require_file model_weights/biodiversity/stage4_sampling/stage4_sampling.ckpt B6
   require_file pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth B8
+  echo "[B9] Re-verifying teacher is native-A before KD (guards --from B9 resumes / stale .pth)"
+  # Hard gate: aborts (set -e) rather than silently distilling from a stale/6-class teacher.
+  PYTHONPATH=. python scripts/verify_teacher_channels.py \
+    --ckpt pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
+    --data-root data/openearthmap_teacher/val
   echo "[B9] Stage 5: Knowledge distillation"
   PYTHONPATH=. python -m train.train_kd \
     -c config/biodiversity/stage5_kd.py --force
+fi
+
+# ============= N. NULL CONTROLS (optional; export RUN_NULL_CONTROLS=1) ===============
+# Off by default. Two attribution controls that isolate each warm-start stage's NAMED mechanism
+# from the extra-epochs effect (each differs from its parent stage in EXACTLY one component):
+#   N4 = Stage 3b continued WITHOUT the sampler  ->  Stage4 - N4 = the sampler's effect
+#   N5 = Stage 4 continued WITHOUT KD            ->  Stage5 - N5 = KD's effect
+# They init from the same checkpoints as Stage 4 / Stage 5, run the same 45 epochs, and are
+# evaluated automatically by C1 (compute_metrics rglobs all checkpoints under model_weights).
+
+if run_stage N4 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
+  require_file model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt B4
+  echo "[N4] Null control: Stage 3b continued WITHOUT the hard x minority sampler"
+  PYTHONPATH=. python -m train.train_supervision \
+    -c config/biodiversity/stage4null_nosampler.py --force
+fi
+
+if run_stage N5 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
+  require_file model_weights/biodiversity/stage4_sampling/stage4_sampling.ckpt B6
+  echo "[N5] Null control: Stage 4 continued WITHOUT knowledge distillation"
+  PYTHONPATH=. python -m train.train_supervision \
+    -c config/biodiversity/stage5null_nokd.py --force
 fi
 
 # ======================== C. EVALUATION ==============================
@@ -252,9 +306,17 @@ if run_stage C1; then
 fi
 
 if run_stage C2; then
+  require_file model_weights/biodiversity/stage1_baseline/stage1_baseline.ckpt B1
   require_file model_weights/biodiversity/stage5_kd/stage5_kd.ckpt B9
   require_nonempty data/biodiversity_split/test/images A1
-  echo "[C2] Evaluating held-out test set (final model only)"
+  echo "[C2] Evaluating held-out test set (Stage 1 baseline + Stage 5 final; intermediate stages not on test)"
+  # Baseline AND final on the test split — C4 (export_final_test_table) needs both metrics.json files.
+  PYTHONPATH=. python evaluation/compute_metrics.py \
+    --split test \
+    --base-dir model_weights/biodiversity/stage1_baseline \
+    --data-root data/biodiversity_split/test \
+    --out-dir evaluation/evaluation_results/test \
+    --force
   PYTHONPATH=. python evaluation/compute_metrics.py \
     --split test \
     --base-dir model_weights/biodiversity/stage5_kd \
@@ -281,6 +343,7 @@ fi
 
 if run_stage D; then
   require_nonempty evaluation/evaluation_results/val C1
+  require_nonempty model_weights/biodiversity B9   # fail fast before running a1-a6
   echo "[D] Running supplementary analyses (A1-A6)"
   PYTHONPATH=. python scripts/analysis/a1_minority_recall.py
   PYTHONPATH=. python scripts/analysis/a2_symmetric_confusion.py
@@ -288,6 +351,9 @@ if run_stage D; then
   PYTHONPATH=. python scripts/analysis/a4_val_test_gap.py
   PYTHONPATH=. python scripts/analysis/a5_majority_stability.py
   PYTHONPATH=. python scripts/analysis/a6_weight_gini.py
+  echo "[D] Bootstrap confidence intervals (per-tile resampling; prerequisite for Figure 10)"
+  # --force re-runs inference instead of reusing stale analysis/per_tile_cms/*.npz from a prior run.
+  PYTHONPATH=. python scripts/analysis/bootstrap_metrics.py --device cuda --force
 fi
 
 # ======================== E. FIGURES =================================

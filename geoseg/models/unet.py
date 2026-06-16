@@ -55,15 +55,21 @@ class TeacherUNet(nn.Module):
         else:
             state_dict = checkpoint
         
-        # Try to load the state dict
-        try:
-            self.model.load_state_dict(state_dict, strict=True)
-            print(f"Successfully loaded teacher checkpoint from {checkpoint_path}")
-        except RuntimeError as e:
-            print(f"Warning: Could not load checkpoint with strict=True: {e}")
-            print("Attempting to load with strict=False...")
-            self.model.load_state_dict(state_dict, strict=False)
-            print("Loaded checkpoint with strict=False (some weights may be missing)")
+        # Checkpoints exported by export_teacher_checkpoint.py keep the "model." prefix
+        # (TeacherUNet wraps smp.Unet as self.model), so they load into self, not self.model.
+        missing, unexpected = self.load_state_dict(state_dict, strict=False)
+        if missing or unexpected:
+            # Legacy checkpoints may lack the "model." prefix; retry against the inner module.
+            stripped = {k.replace("model.", "", 1): v for k, v in state_dict.items()}
+            missing2, unexpected2 = self.model.load_state_dict(stripped, strict=False)
+            if missing2 or unexpected2:
+                raise RuntimeError(
+                    f"Teacher checkpoint did not load cleanly from {checkpoint_path}: "
+                    f"self-load missing/unexpected={len(missing)}/{len(unexpected)}, "
+                    f"inner-load missing/unexpected={len(missing2)}/{len(unexpected2)}. "
+                    "Check the key prefix produced by export_teacher_checkpoint.py."
+                )
+        print(f"Successfully loaded teacher checkpoint from {checkpoint_path}")
     
     def freeze(self):
         """Freeze all parameters and set to eval mode."""

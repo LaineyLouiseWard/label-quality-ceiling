@@ -147,10 +147,22 @@ with open(weights_path_tsv, "r", encoding="utf-8") as f:
         img_id, w = line.split("\t")
         id_to_weight[img_id] = float(w)
 
+
+def _norm_id(x):
+    # The TSV is keyed by BASE id (build_stage4_weights strips _repN so replicas share
+    # their base weight). Replicated tiles in train_rep carry a _repN suffix, so we must
+    # strip it before the lookup or all 800 replicas silently default to weight 1.0.
+    if "_rep" in x:
+        b, r = x.rsplit("_rep", 1)
+        if r.isdigit():
+            return b
+    return x
+
+
 weights = []
 missing = 0
 for img_id in train_dataset.img_ids:
-    w = id_to_weight.get(img_id, None)
+    w = id_to_weight.get(_norm_id(img_id), None)
     if w is None:
         weights.append(1.0)
         missing += 1
@@ -159,7 +171,10 @@ for img_id in train_dataset.img_ids:
 
 print(f"[Stage4] Loaded weights for {len(id_to_weight)} ids. Missing={missing}/{len(train_dataset.img_ids)}")
 if missing > 0:
-    print("[Stage4][WARN] Some train ids missing weights; defaulted to 1.0. Check ID alignment.")
+    raise RuntimeError(
+        f"[Stage4] {missing}/{len(train_dataset.img_ids)} train ids have no sampling weight "
+        "(ID alignment broken). Refusing to train with silently mis-weighted sampling."
+    )
 
 sampler = WeightedRandomSampler(
     weights=weights,

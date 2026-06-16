@@ -5,29 +5,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-# Original OEM classes (9)
-OEM_CLASSES = [
-    'Tree',          # 0 -> Forest
-    'Rangeland',     # 1 -> Grassland (0.7) + SemiNatural (0.3)
-    'Cropland',      # 2 -> Cropland
-    'Developed',     # 3 -> Settlement
-    'Road',          # 4 -> Settlement
-    'Bareland',      # 5 -> SemiNatural
-    'Water',         # 6 -> Background
-    'Background',    # 7 -> Background
-    'Unknown'        # 8 -> Background (unknown class)
-]
+# Class orders and the KD mapping all derive from the canonical source: geoseg/taxonomy.py.
+from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES, oem_to_student_kd
 
-# Output channel order — must match biodiversity_dataset.CLASSES exactly.
+# Native OpenEarthMap channel order (teacher output channel i == OEM class i). The KD targets
+# (built below) follow Table 1's distillation column — rangeland and bareland carry semi-natural
+# mass; the pre-training column is handled separately by relabel_oem_taxonomy.
+OEM_CLASSES = list(OEM_NATIVE_CLASSES)
+
+# Student output channel order — must match biodiversity_dataset.CLASSES exactly.
 # Verified at config-parse time by the assertion in config/biodiversity/stage5_kd.py.
-NEW_CLASSES = [
-    'Background',   # 0
-    'Forest',       # 1
-    'Grassland',    # 2
-    'Cropland',     # 3
-    'Settlement',   # 4
-    'Seminatural',  # 5
-]
+NEW_CLASSES = list(STUDENT_CLASSES)
 
 # Tuple form for equality comparison against biodiversity_dataset.CLASSES.
 REMAP_OUTPUT_CLASSES = tuple(NEW_CLASSES)
@@ -42,22 +30,14 @@ def create_mapping_matrix(alpha=0.7, class_weights=None):
     Returns:
         torch.Tensor of shape (9, 6) with each row summing to 1.0
     """
-    # Initialize mapping matrix
+    # Build from the canonical KD map (geoseg/taxonomy.oem_to_student_kd): rows = native OEM
+    # class (0..8), columns = student NEW_CLASSES order
+    # (Background=0, Forest=1, Grassland=2, Cropland=3, Settlement=4, Seminatural=5). Rows sum to 1.0.
     M = torch.zeros(len(OEM_CLASSES), len(NEW_CLASSES))
-    
-    # Column indices match NEW_CLASSES order:
-    # Background=0, Forest=1, Grassland=2, Cropland=3, Settlement=4, Seminatural=5
-    M[0, 1] = 1.0            # Tree        -> Forest      (col 1)
-    M[1, 2] = alpha          # Rangeland   -> Grassland   (col 2, alpha)
-    M[1, 5] = 1.0 - alpha   # Rangeland   -> Seminatural (col 5, 1-alpha)
-    M[2, 3] = 1.0            # Cropland    -> Cropland    (col 3)
-    M[3, 4] = 1.0            # Developed   -> Settlement  (col 4)
-    M[4, 4] = 1.0            # Road        -> Settlement  (col 4)
-    M[5, 5] = 1.0            # Bareland    -> Seminatural (col 5)
-    M[6, 0] = 1.0            # Water       -> Background  (col 0)
-    M[7, 0] = 1.0            # Background  -> Background  (col 0)
-    M[8, 0] = 1.0            # Unknown     -> Background  (col 0)
-    
+    for oem_idx, targets in oem_to_student_kd(alpha).items():
+        for student_idx, weight in targets:
+            M[oem_idx, student_idx] = weight
+
     # Apply class weights to boost minority classes
     if class_weights is not None:
         if isinstance(class_weights, (list, tuple)):

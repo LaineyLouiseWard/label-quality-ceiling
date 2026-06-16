@@ -57,7 +57,7 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--data_root", type=str, default="data/biodiversity_split/train_rep")
     p.add_argument("--ckpt", type=str, required=True, help="Stage 3b Lightning checkpoint")
-    p.add_argument("--out", type=str, default="artifacts/stage4_weights.tsv")
+    p.add_argument("--out", type=str, default="artifacts/stage4_sampling_weights.tsv")
     p.add_argument("--batch_size", type=int, default=2)
     p.add_argument("--num_workers", type=int, default=4)
 

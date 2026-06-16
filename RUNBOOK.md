@@ -28,7 +28,7 @@ To resume from a specific stage:
 bash RUNBOOK.sh --from B6   # resume from Stage 4 training onward
 ```
 
-Valid stages: `A1`–`A8` (data prep), `B1`–`B9` (training),
+Valid stages: `A0` (taxonomy consistency check), `A1`–`A8` (data prep), `B1`–`B9` (training),
 `C1`–`C4` (evaluation), `D` (supplementary analyses), `E` (figures).
 The script validates the `--from` argument and checks that required
 inputs from earlier stages exist before each step.
@@ -152,18 +152,22 @@ PYTHONPATH=. python scripts/data_prep/create_biodiversity_oem_combined.py \
 **Input:** `data/biodiversity_split/`, `data/openearthmap_relabelled_filtered/`
 **Output:** `data/biodiversity_oem_combined/{train,val,test}/{images,masks}/`
 
-### A8. Prepare OEM teacher training split
+### A8. Prepare OEM teacher training split (full OEM, native 9-class)
 
 ```bash
 PYTHONPATH=. python scripts/data_prep/prepare_oem_teacher_data.py \
-  --raw-root data/openearthmap_relabelled_filtered \
+  --raw-root data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD \
   --out-root data/openearthmap_teacher \
   --seed 42 \
   --overwrite
 ```
 
-**Input:** `data/openearthmap_relabelled_filtered/`
-**Output:** `data/openearthmap_teacher/{train,val}/{images,masks}/`
+The teacher trains on the **full, native OEM** (8 land classes + background, labels 0–8) — NOT the
+rural-filtered/relabelled 6-class set. Using the filtered/relabelled data here would train the teacher
+on the wrong taxonomy and silently break KD.
+
+**Input:** `data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/<region>/{images,labels}/` (native 0–8)
+**Output:** `data/openearthmap_teacher/{train,val}/{images,masks}/` (~2418/269 split)
 
 ---
 
@@ -253,6 +257,7 @@ PYTHONPATH=. python -m train.train_teacher \
 
 **Data:** `data/openearthmap_teacher/`
 **Output:** `model_weights/teacher/teacher.ckpt`
+**Note:** first run downloads ImageNet-pretrained EfficientNet-B4 backbone weights (needs internet).
 
 ### B8. Export teacher checkpoint
 
@@ -347,7 +352,14 @@ PYTHONPATH=. python scripts/analysis/a3_stage4_weight_uplift.py
 PYTHONPATH=. python scripts/analysis/a4_val_test_gap.py
 PYTHONPATH=. python scripts/analysis/a5_majority_stability.py
 PYTHONPATH=. python scripts/analysis/a6_weight_gini.py
+PYTHONPATH=. python scripts/analysis/bootstrap_metrics.py --device cuda
 ```
+
+The last step (`bootstrap_metrics.py`) runs per-tile resampling to produce the
+bootstrap confidence intervals consumed by Figure 10. It requires the trained
+stage checkpoints under `model_weights/biodiversity/` and writes
+`analysis/bootstrap_results.md` plus cached per-tile confusion matrices in
+`analysis/per_tile_cms/`.
 
 **Inputs:**
 - `evaluation/evaluation_results/val/stage*/confusion_matrix.csv` (A1, A2, A5)
@@ -356,7 +368,7 @@ PYTHONPATH=. python scripts/analysis/a6_weight_gini.py
 - `artifacts/stage4_sampling_weights.tsv` (A3, A6)
 - `artifacts/train_augmentation_list.json` (A3)
 
-**Output:** printed tables matching [docs/robustness_analyses.md](docs/robustness_analyses.md).
+**Output:** printed tables (the A1–A6 analysis values reported in the manuscript).
 
 ---
 
@@ -375,10 +387,10 @@ python scripts/figures/build_all_figures.py --device cuda
 | 1 | `pdflatex scripts/figures/Figure01.tex` (staged pipeline flowchart, TikZ) | -- |
 | 2 | `pdflatex scripts/figures/Figure02.tex` (two-axes mitigation schematic, TikZ) | -- |
 | 3 | `python scripts/figures/Figure03.py` | `data/biodiversity_raw/` |
-| 4 | `python scripts/figures/Figure04.py` (dataset class-distribution comparison) | `data/biodiversity_raw/masks/`, `data/openearthmap_filtered/masks/` |
-| 5 | `python scripts/figures/Figure05.py` | `artifacts/stage4_sampling_weights.tsv` |
-| 6 | `python scripts/figures/Figure06.py` | `artifacts/stage4_sampling_weights.tsv`, Stage 3b ckpt |
-| 7 | `python scripts/figures/Figure07.py` | `data/openearthmap_relabelled/`, `data/openearthmap_raw/` |
+| 4 | `python scripts/figures/Figure04.py` (OpenEarthMap taxonomy-harmonisation example) | `data/openearthmap_raw/`, `data/openearthmap_relabelled/` |
+| 5 | `python scripts/figures/Figure05.py` (dataset class-distribution comparison) | `data/biodiversity_raw/masks/`, `data/openearthmap_filtered/masks/` |
+| 6 | `python scripts/figures/Figure06.py` (hard × minority sampling-weight distribution) | `artifacts/stage4_sampling_weights.tsv` |
+| 7 | `python scripts/figures/Figure07.py` (low/high-weight example tiles) | `artifacts/stage4_sampling_weights.tsv`, Stage 3b ckpt |
 | 8 | `python scripts/figures/Figure08.py` | All stage checkpoints, `data/biodiversity_split/val/` |
 | 9 | `python scripts/figures/Figure09.py` | `evaluation/evaluation_results/val/` (confusion matrices) |
 | 10 | `python scripts/figures/Figure10.py` | `evaluation/evaluation_results/val/` (metrics.json) |
@@ -387,7 +399,7 @@ python scripts/figures/build_all_figures.py --device cuda
 (For Figures 1--2, `build_all_figures.py` compiles the `.tex` and copies the PDF into `figures/`.)
 
 All outputs are written to `figures/`.
-See [FIGURE_MAP.md](FIGURE_MAP.md) for full per-figure dependency lists.
+See [docs/FIGURE_MAP.md](docs/FIGURE_MAP.md) for full per-figure dependency lists.
 
 ---
 
@@ -399,7 +411,7 @@ Raw data (Biodiversity + OEM)
  +-- A1-A3: split, analyse, replicate  -->  biodiversity_split/{train,train_rep,val,test}
  +-- A4-A6: filter + relabel OEM       -->  openearthmap_relabelled_filtered/
  +-- A7:    combine Bio + OEM          -->  biodiversity_oem_combined/
- +-- A8:    OEM teacher split           -->  openearthmap_teacher/
+ +-- A8:    OEM teacher split (raw OEM)  -->  openearthmap_teacher/   (native 9-class; reads raw OEM, independent of A4-A6)
  |
  +-- B1-B4: Stages 1-3b training
  +-- B5:    build sampling weights     -->  artifacts/stage4_sampling_weights.tsv

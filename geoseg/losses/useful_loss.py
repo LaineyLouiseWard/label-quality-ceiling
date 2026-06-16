@@ -90,6 +90,4 @@ if __name__ == '__main__':
     logits = torch.randn((2, 2, 16, 16))
     # print(targets)
     model = EdgeLoss()
-    loss = model.compute_edge_loss(logits, targets)
-
-    print(loss)
+    model.compute_edge_loss(logits, targets)

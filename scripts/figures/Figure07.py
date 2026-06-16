@@ -1,4 +1,4 @@
-"""Fig 6: Example low- and high-weight Biodiversity tiles under hard x minority-aware
+"""Fig 7: Example low- and high-weight Biodiversity tiles under hard x minority-aware
 sampling (Stage 4), annotated with tile difficulty, minority richness, and resulting weight.
 
 Writes:
