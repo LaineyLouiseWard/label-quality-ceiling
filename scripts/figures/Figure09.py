@@ -1,4 +1,4 @@
-"""Fig 9: Confusion matrices for Stages 1, 4, and 5.
+"""Fig 9: Confusion matrices for Stages 1, 3, and 4 (baseline, sampler, KD).
 
 Writes:
   figures/Figure09.pdf

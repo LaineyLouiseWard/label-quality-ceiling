@@ -4,8 +4,8 @@ scripts/figures/Figure08.py
 
 Qualitative ablation comparison on FOUR tiles, shown as 4 columns.
 
-Layout (7 rows x 4 columns):
-  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3, Stage 4, Stage 5
+Layout (6 rows x 4 columns):
+  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3, Stage 4
   Columns: (a)–(d) = four chosen tile IDs
 
 Shows RAW predictions (no extra AOI masking beyond GT==0 invalid masking used for display).

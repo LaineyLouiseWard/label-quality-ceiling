@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A4: Validation-test per-class IoU gap for the Stage 5 (KD) model.
+"""A4: Validation-test per-class IoU gap for the Stage 4 (KD) model.
 
 Loads val and test metrics.json, computes per-class IoU difference,
 and prints sorted by gap magnitude.
@@ -39,7 +39,7 @@ SHORT_NAMES = {
 
 def main() -> None:
     print("=" * 60)
-    print("A4: Validation-Test Per-Class IoU Gap (Stage 5)")
+    print("A4: Validation-Test Per-Class IoU Gap (Stage 4)")
     print("=" * 60)
 
     val = load_metrics(VAL_METRICS)

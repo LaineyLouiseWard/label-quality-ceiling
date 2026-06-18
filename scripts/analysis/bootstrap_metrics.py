@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tile-level bootstrap confidence intervals for all ablation stages (1, 2, 3b, 4, 5).
+Tile-level bootstrap confidence intervals for all ablation stages (1, 2, 3, 4).
 
 Runs inference on val and test splits, collects per-tile confusion matrices,
 then bootstraps (tile-level resampling) to produce 95% CIs for mIoU, mF1, OA.
@@ -185,7 +185,7 @@ def load_cms(path: Path) -> list[np.ndarray]:
 # ── main ───────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Bootstrap CIs for all ablation stages (1, 2, 3b, 4, 5)")
+    parser = argparse.ArgumentParser(description="Bootstrap CIs for all ablation stages (1, 2, 3, 4)")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--n-boot", type=int, default=2000)
     parser.add_argument("--force", action="store_true", help="Re-run inference even if cache exists")

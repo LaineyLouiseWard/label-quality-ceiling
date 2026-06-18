@@ -5,9 +5,10 @@ Ground EVERY OEM->student KD mapping in data (generalises the Rangeland-split pr
 One forward pass of the FROZEN teacher over the training tiles produces a 9x6 matrix:
     rows  = teacher's native OEM prediction (argmax / prob mass)
     cols  = ground-truth student class
-From it, every hard-coded mapping in geoseg.taxonomy.oem_to_student_kd is checkable:
-"of the pixels the teacher calls OEM-class X, what are they REALLY?" — e.g. is Bareland->Seminatural(1.0)
-justified, or do teacher-Bareland pixels actually fall elsewhere?
+From it, the grounded mappings are derived: the pre-train target is the argmax of each row
+(geoseg.taxonomy.OEM_TO_STUDENT_PRETRAIN) and the KD-B target is the row-normalised soft distribution.
+"of the pixels the teacher calls OEM-class X, what are they REALLY?" — e.g. teacher-Agriculture is
+82% Grassland (Irish farmland is pasture), not Cropland.
 
 This depends only on the frozen teacher + fixed training masks, so it is computed ONCE for the campaign.
 Also serves as the teacher-reliability evidence for the manuscript.
@@ -24,7 +25,7 @@ from torch.utils.data import DataLoader
 
 from geoseg.datasets.biodiversity_dataset import BiodiversityTrainDataset, val_aug
 from geoseg.models.unet import TeacherUNet
-from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES, oem_to_student_kd
+from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES, OEM_TO_STUDENT_PRETRAIN
 
 TEACHER_CKPT = "pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth"
 NS, NO = len(STUDENT_CLASSES), len(OEM_NATIVE_CLASSES)  # 6, 9
@@ -66,8 +67,9 @@ def main() -> None:
              oem_classes=np.array(OEM_NATIVE_CLASSES), student_classes=np.array(STUDENT_CLASSES))
     print("saved artifacts/teacher_oem_gt_confusion.npz")
 
-    kd_map = oem_to_student_kd(alpha=0.73)  # current grounded mapping, to annotate
-
+    # Annotate each row with the GROUNDED pre-train target = argmax of the teacher's confusion
+    # (geoseg.taxonomy.OEM_TO_STUDENT_PRETRAIN), NOT the legacy name-based map. This matches the
+    # argmax shown in each row, so the annotation stays truthful to what the pipeline actually uses.
     def show(mat, title):
         print(f"\n==== {title} :  rows = teacher OEM prediction, cols = GT student (row-normalised %) ====")
         head = "teacher-OEM \\ GT |" + "".join(f"{c[:9]:>11}" for c in STUDENT_CLASSES)
@@ -76,9 +78,9 @@ def main() -> None:
             row = mat[o]
             tot = row.sum()
             pct = 100 * row / tot if tot > 0 else row
-            tgt = ",".join(STUDENT_CLASSES[i] for i, _ in kd_map.get(o, []))
+            tgt = STUDENT_CLASSES[OEM_TO_STUDENT_PRETRAIN[o]]
             line = f"{OEM_NATIVE_CLASSES[o]:<16}|" + "".join(f"{p:>10.1f}%" for p in pct)
-            print(f"{line}   [KD->{tgt}]  (n={int(tot):,})" if mat is hard else f"{line}   [KD->{tgt}]")
+            print(f"{line}   [grounded->{tgt}]  (n={int(tot):,})" if mat is hard else f"{line}   [grounded->{tgt}]")
 
     show(hard, "HARD (argmax)")
     show(soft, "SOFT (prob-weighted)")

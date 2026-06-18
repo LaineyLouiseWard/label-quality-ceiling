@@ -31,6 +31,7 @@ analysis/*.npz
 analysis/bootstrap_results.*
 figures/*.pdf
 artifacts/tile_number_metrics.json
+artifacts/sampler_weights.tsv
 
 # --------------------
 # Python

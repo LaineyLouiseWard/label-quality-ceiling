@@ -194,13 +194,17 @@ def _load_student_weights_from_pl_ckpt(model: nn.Module, ckpt_path: str):
 # ---------------------------------------------------------------------
 def main():
     args = get_args()
-    config = py2cfg(args.config_path)
 
     # Student lineage seed for the 5-seed campaign (default 42). Set SEED=<n> in the environment
     # to reseed the full student lineage; the teacher is built once and held fixed (not reseeded).
+    # Seed BEFORE py2cfg: the model is constructed at config-parse time (e.g.
+    # ft_unetformer(pretrained=False)), so seeding afterwards would leave the fresh-init stages'
+    # (Stage 1, Stage 2a) weight initialisation entropy-seeded and not reproducible.
     seed = int(os.environ.get("SEED", "42"))
     seed_everything(seed)
     pl.seed_everything(seed, workers=True)
+
+    config = py2cfg(args.config_path)
 
     g = torch.Generator().manual_seed(seed)
     if hasattr(config, "train_loader") and config.train_loader is not None:

@@ -170,7 +170,9 @@ sampler = WeightedRandomSampler(
     weights=weights,
     # Fixed per-epoch step budget (2646 draws) shared by Stage 3, Stage 4 (KD) and the null controls
     # so they are mutually step-matched: comparisons isolate the named mechanism (sampler / KD) from
-    # the per-epoch gradient-step count. (2646 = the 1846 train tiles + 800 effective minority draws.)
+    # the per-epoch gradient-step count. (2646 = the size of the former replicated training set,
+    # 1846 base tiles + 800 minority replicas; replication is gone, but the value is retained purely
+    # as a constant step budget so all four sampler arms are comparable.)
     # See docs/CROSSCHECK_REVIEW_2026-06-14.md (nuance N5).
     num_samples=2646,
     replacement=True,
