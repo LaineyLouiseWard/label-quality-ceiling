@@ -6,6 +6,7 @@ pretrain_weights/
 model_weights/
 bin/
 docs/
+sonic/
 
 # --------------------
 # Logs / outputs
