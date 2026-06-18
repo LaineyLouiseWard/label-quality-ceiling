@@ -56,18 +56,24 @@ OEM_NATIVE_CLASSES = (
 
 # ---------------------------------------------------------------------------
 # OEM native index -> student index for PRE-TRAINING (hard labels). Table 1, pre-training column.
-# Bareland and Rangeland (the daggers) differ from the KD column below.
+# GROUNDED (2026-06-17): argmax of the teacher's empirical OEM->target confusion on the TRAINING set
+# (scripts/analysis/teacher_oem_to_gt_confusion.py; docs/KD_MAPPING_GROUNDING.md). Replaces the original
+# name-based hand-map, which mis-routed the teacher's domain-confused classes (Irish "Agriculture" is
+# pasture = Grassland, not Cropland; teacher "Water"/"Bareland" land on vegetation, not Background).
+# Consistent BY CONSTRUCTION with the KD column (= the full soft confusion): pretrain = argmax(confusion),
+# KD = full distribution -- so no "dagger" exceptions are needed anymore.
+#   Old name-based hand-map was: {0:0, 1:0, 2:2, 3:4, 4:4, 5:1, 6:0, 7:3, 8:4}
 # ---------------------------------------------------------------------------
 OEM_TO_STUDENT_PRETRAIN = {
-    0: 0,  # Unknown      -> Background
-    1: 0,  # Bareland     -> Background      (dagger: -> Seminatural under KD)
-    2: 2,  # Rangeland    -> Grassland       (dagger: split under KD)
-    3: 4,  # Developed    -> Settlement
-    4: 4,  # Road         -> Settlement
-    5: 1,  # Tree         -> Forest
-    6: 0,  # Water        -> Background
-    7: 3,  # Agriculture  -> Cropland
-    8: 4,  # Building     -> Settlement
+    0: 0,  # Unknown      -> Background    (99% GT Background)
+    1: 5,  # Bareland     -> Seminatural   [CHANGED from Background] (41% GT Seminatural, plurality)
+    2: 2,  # Rangeland    -> Grassland     (54% GT Grassland)
+    3: 4,  # Developed    -> Settlement    (59% GT Settlement)
+    4: 4,  # Road         -> Settlement    (57% GT Settlement)
+    5: 1,  # Tree         -> Forest        (75% GT Forest)
+    6: 2,  # Water        -> Grassland     [CHANGED from Background] (58% GT Grassland)
+    7: 2,  # Agriculture  -> Grassland     [CHANGED from Cropland]   (82% GT Grassland; Irish ag = pasture)
+    8: 4,  # Building     -> Settlement    (85% GT Settlement)
 }
 
 

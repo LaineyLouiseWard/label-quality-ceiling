@@ -25,8 +25,8 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 CM_A = repo_root / "evaluation/evaluation_results/val/stage1_baseline/confusion_matrix.npy"
-CM_B = repo_root / "evaluation/evaluation_results/val/stage4_sampling/confusion_matrix.npy"
-CM_C = repo_root / "evaluation/evaluation_results/val/stage5_kd/confusion_matrix.npy"
+CM_B = repo_root / "evaluation/evaluation_results/val/stage3_sampler/confusion_matrix.npy"
+CM_C = repo_root / "evaluation/evaluation_results/val/stage4_kd/confusion_matrix.npy"
 
 OUT_DIR = repo_root / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -112,12 +112,12 @@ def main():
 
     ax2 = fig.add_subplot(gs[0, 1])
     im2 = plot_cm(ax2, cm_b_pct)
-    ax2.set_title("(b) Stage 4: +Hard × Minority", fontsize=TITLE_FONTSIZE, fontweight="bold", pad=10)
+    ax2.set_title("(b) Stage 3: +Hard × Minority", fontsize=TITLE_FONTSIZE, fontweight="bold", pad=10)
 
     ax3 = fig.add_subplot(gs[0, 2])
     im3 = plot_cm(ax3, cm_c_pct)
-    # IMPORTANT: label as Stage 5 in the paper, even if file path is stage5_kd
-    ax3.set_title("(c) Stage 5: +Knowledge Distillation", fontsize=TITLE_FONTSIZE, fontweight="bold", pad=10)
+    # Paper Stage 4 = repo checkpoint folder stage4_kd
+    ax3.set_title("(c) Stage 4: +Knowledge Distillation", fontsize=TITLE_FONTSIZE, fontweight="bold", pad=10)
 
     # colorbar (shared scale)
     cax = fig.add_subplot(gs[0, 3])

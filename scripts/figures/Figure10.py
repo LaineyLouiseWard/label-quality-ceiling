@@ -75,14 +75,13 @@ mpl.rcParams.update({
 # -----------------------
 # Stages to plot (paper order)
 # -----------------------
-# NOTE: 3a/3b are merged into a single Stage 3 (deployable fine-tuned model; see C17);
-# the non-deployed pre-trained checkpoint is not shown as a separate stage.
+# NOTE: 2a/2b are merged into a single Stage 2 (deployable OEM-transfer fine-tuned model);
+# the non-deployed combined-set pre-trained checkpoint is not shown as a separate stage.
 STAGES: List[Tuple[str, str]] = [
     ("1", "stage1_baseline"),
-    ("2", "stage2_replication"),
-    ("3", "stage3b_finetune"),
-    ("4", "stage4_sampling"),
-    ("5", "stage5_kd"),
+    ("2", "stage2b_oem_finetune"),
+    ("3", "stage3_sampler"),
+    ("4", "stage4_kd"),
 ]
 
 # -----------------------

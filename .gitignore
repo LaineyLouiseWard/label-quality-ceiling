@@ -22,6 +22,17 @@ scripts/figures/*.aux
 scripts/figures/*.log
 
 # --------------------
+# Regenerable derived outputs (rebuilt by RUNBOOK.sh; proprietary-data-derived, not shareable).
+# Final paper figures are committed once, post-campaign.
+# --------------------
+evaluation/evaluation_results/
+analysis/per_tile_cms/
+analysis/*.npz
+analysis/bootstrap_results.*
+figures/*.pdf
+artifacts/tile_number_metrics.json
+
+# --------------------
 # Python
 # --------------------
 __pycache__/

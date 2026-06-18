@@ -90,7 +90,7 @@ IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 # marking the same image region all the way down so the feature's evolution across
 # stages is trackable (settlement consolidating, semi-natural recovering, roads
 # remaining fragmented).
-ANNOTATED_ROWS = {"gt", "s1", "s2", "s3", "s4", "s5"}
+ANNOTATED_ROWS = {"gt", "s1", "s2", "s3", "s4"}
 HIGHLIGHT_ANNOTATIONS = [
     {  # H1: Compact settlement cluster — tile (b)
         "col": 1,
@@ -273,7 +273,7 @@ def make_grid_figure(
 
     anns = annotations if annotations else []
 
-    keys = ["img", "gt", "s1", "s2", "s3", "s4", "s5"]
+    keys = ["img", "gt", "s1", "s2", "s3", "s4"]
     for c in range(n_cols):
         col = columns[c]
         for r, k in enumerate(keys):
@@ -324,13 +324,12 @@ def main() -> None:
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     ap.add_argument("--out-path", default="figures/Figure08.pdf")
 
-    # Match your actual folder names under model_weights/biodiversity/
+    # Match the folder names under model_weights/biodiversity/ (4-stage, no-replication).
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
-    ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2_replication")
-    # Stage 3 = deployable fine-tuned model (3a pre-train + 3b fine-tune merged; see C17)
-    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3b_finetune")
-    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_sampling")
-    ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_kd")
+    # Stage 2 = deployable OEM-transfer model (2a pre-train + 2b fine-tune merged)
+    ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2b_oem_finetune")
+    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3_sampler")
+    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_kd")
 
     args = ap.parse_args()
 
@@ -348,7 +347,6 @@ def main() -> None:
         "s2": resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
         "s3": resolve_ckpt(str((repo_root / args.stage3_ckpt).resolve())),
         "s4": resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve())),
-        "s5": resolve_ckpt(str((repo_root / args.stage5_ckpt).resolve())),
     }
 
     nets: Dict[str, torch.nn.Module] = {}
@@ -369,7 +367,7 @@ def main() -> None:
         invalid = (gt == 0)
 
         pred: Dict[str, np.ndarray] = {}
-        for stage_key in ["s1", "s2", "s3", "s4", "s5"]:
+        for stage_key in ["s1", "s2", "s3", "s4"]:
             pred[stage_key] = predict_mask(nets[stage_key], img_t, device)
 
         columns.append({
@@ -379,7 +377,6 @@ def main() -> None:
             "s2": colorize_mask(pred["s2"], invalid=invalid),
             "s3": colorize_mask(pred["s3"], invalid=invalid),
             "s4": colorize_mask(pred["s4"], invalid=invalid),
-            "s5": colorize_mask(pred["s5"], invalid=invalid),
         })
 
         print(img_id, "outside pixels (gt==0):", int((gt == 0).sum()))
@@ -391,10 +388,9 @@ def main() -> None:
         "Satellite\nImage",
         "Ground\nTruth",
         "Stage 1:\nBaseline",
-        "Stage 2:\n+Replication",
-        "Stage 3:\n+OEM Pre-Training\n& Fine-Tuning",
-        "Stage 4:\n+Hard × Minority\nSampling",
-        "Stage 5:\n+Knowledge\nDistillation",
+        "Stage 2:\n+OEM Transfer",
+        "Stage 3:\n+Hard × Minority\nSampling",
+        "Stage 4:\n+Knowledge\nDistillation",
     ]
 
     handles = make_legend_handles(include_background=True)

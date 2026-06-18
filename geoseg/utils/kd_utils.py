@@ -14,7 +14,7 @@ from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES, oem_to_student_
 OEM_CLASSES = list(OEM_NATIVE_CLASSES)
 
 # Student output channel order — must match biodiversity_dataset.CLASSES exactly.
-# Verified at config-parse time by the assertion in config/biodiversity/stage5_kd.py.
+# Verified at config-parse time by the assertion in config/biodiversity/stage4_kd.py.
 NEW_CLASSES = list(STUDENT_CLASSES)
 
 # Tuple form for equality comparison against biodiversity_dataset.CLASSES.
@@ -49,6 +49,33 @@ def create_mapping_matrix(alpha=0.7, class_weights=None):
         M = M / (row_sums + 1e-8)
     
     return M
+
+
+def build_mapping_from_confusion(mode, conf_path="artifacts/teacher_oem_gt_confusion.npz", alpha=0.73):
+    """Build a 9x6 KD mapping matrix GROUNDED in the teacher's training-set confusion.
+
+    Reads the soft (prob-weighted) confusion saved by
+    scripts/analysis/teacher_oem_to_gt_confusion.py and row-normalises it to
+    P(GT student | teacher OEM) -- a soft label-transition matrix (cf. Patrini 2017
+    forward-correction). See docs/KD_MAPPING_GROUNDING.md.
+
+    mode 'A' (targeted): keep the semantic map create_mapping_matrix(alpha) and replace ONLY the
+        three demonstrably-mismatched rows -- Bareland(1), Water(6), Agriculture(7) -- with the
+        measured distribution. Clean/grounded rows stay confident (no teacher-noise injection).
+    mode 'B' (full data-driven): every OEM row = the measured distribution.
+    """
+    data = np.load(conf_path, allow_pickle=True)
+    soft = data["soft"].astype(np.float64)                       # (9, 6)
+    rownorm = soft / soft.sum(axis=1, keepdims=True).clip(min=1e-12)
+    rownorm = torch.tensor(rownorm, dtype=torch.float32)
+    if mode == "B":
+        return rownorm
+    if mode == "A":
+        M = create_mapping_matrix(alpha)
+        for oem_idx in (1, 6, 7):  # Bareland, Water, Agriculture
+            M[oem_idx] = rownorm[oem_idx]
+        return M
+    raise ValueError(f"mode must be 'A' or 'B', got {mode!r}")
 
 
 class KDHelper:

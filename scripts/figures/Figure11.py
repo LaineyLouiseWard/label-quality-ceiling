@@ -2,7 +2,7 @@
 """
 scripts/figures/Figure11.py
 
-Quantify how Stage 5 (KD; repo folder stage5_kd) changes predictions vs Stage 1 baseline,
+Quantify how Stage 4 (KD; repo folder stage4_kd) changes predictions vs Stage 1 baseline,
 per class, over an entire split.
 
 For each foreground class c (1..5), compute on GT pixels (gt==c), excluding gt==0:
@@ -17,7 +17,7 @@ Outputs:
 Notes:
   - Uses BiodiversityValDataset / BiodiversityTestWithMasksDataset (same as Figure08.py).
   - Uses canonical dataset CLASSES + PALETTE (exact colours).
-  - Paper naming: "Stage 5" corresponds to repo checkpoint folder "stage5_kd".
+  - Paper naming: "Stage 4" corresponds to repo checkpoint folder "stage4_kd".
 """
 
 from __future__ import annotations
@@ -323,7 +323,7 @@ def main() -> None:
 
     # Baseline and KD checkpoints (match your repo folders)
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
-    ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_kd")  # paper Stage 5
+    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_kd")  # paper Stage 4
 
     ap.add_argument("--out-pdf", default="figures/Figure11.pdf")
 
@@ -336,13 +336,13 @@ def main() -> None:
 
     data_root = (rr / args.data_root).resolve()
     ckpt_s1 = resolve_ckpt(str((rr / args.stage1_ckpt).resolve()))
-    ckpt_kd = resolve_ckpt(str((rr / args.stage5_ckpt).resolve()))
+    ckpt_kd = resolve_ckpt(str((rr / args.stage4_ckpt).resolve()))
 
     print("Repo root:", rr)
     print("Data root:", data_root)
     print("Split:", args.split)
     print("Stage 1 ckpt:", ckpt_s1)
-    print("Stage 5 (repo stage5_kd) ckpt:", ckpt_kd)
+    print("Stage 4 (repo stage4_kd) ckpt:", ckpt_kd)
 
     net_s1 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s1).to(device)
     net_kd = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_kd).to(device)

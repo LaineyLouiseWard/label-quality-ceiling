@@ -4,7 +4,7 @@ Export a LaTeX tabular snippet summarising test-set performance.
 
 Reads:
   evaluation/evaluation_results/test/stage1_baseline/metrics.json
-  evaluation/evaluation_results/test/stage5_kd/metrics.json
+  evaluation/evaluation_results/test/stage4_kd/metrics.json
 
 Writes:
   evaluation/evaluation_results/final_test_table.tex
@@ -30,7 +30,7 @@ OUTPUT_PATH = Path("evaluation/evaluation_results/final_test_table.tex")
 # Stages to include (order matters — rows appear in this order)
 STAGES = [
     ("stage1_baseline", "Stage 1 (baseline)"),
-    ("stage5_kd", "Stage 5 (KD)"),
+    ("stage4_kd", "Stage 4 (KD)"),
 ]
 
 # Class names matching compute_metrics.py (foreground only)

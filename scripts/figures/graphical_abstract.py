@@ -4,13 +4,16 @@ scripts/figures/graphical_abstract.py
 
 Save GA-ready prediction masks (as separate PNGs) for one chosen tile:
 - Stage 1 (baseline)
-- Stage 4
-- Stage 5 (KD)
+- Stage 3 (hard x minority sampler)
+- Stage 4 (KD)
+
+NOTE: the companion graphical_abstract_tikz.tex still describes the old 5-stage / replication
+pipeline and needs a 4-stage redesign (tracked for the manuscript/doc pass).
 
 Outputs:
   figures/graphical_abstract/<img_id>_stage1_baseline.png
-  figures/graphical_abstract/<img_id>_stage4_hardxminority.png
-  figures/graphical_abstract/<img_id>_stage5_kd.png
+  figures/graphical_abstract/<img_id>_stage3_sampler.png
+  figures/graphical_abstract/<img_id>_stage4_kd.png
 
 Optional:
   figures/graphical_abstract/<img_id>_rgb.png
@@ -73,7 +76,7 @@ def resolve_ckpt(path_like: str) -> Path:
     Accept either:
       - a direct .ckpt path
       - a directory -> pick most recent .ckpt under it (recursive)
-    Handles nested run folders (e.g. stage5_kd/stage5_kd/*.ckpt).
+    Handles nested run folders (e.g. stage4_kd/stage4_kd/*.ckpt).
     """
     p = Path(path_like).expanduser().resolve()
 
@@ -182,8 +185,8 @@ def main() -> None:
 
     # IMPORTANT: update defaults to your CURRENT folder names
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
-    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_sampling")
-    ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage5_kd")
+    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage3_sampler")
+    ap.add_argument("--stage5-ckpt", default="model_weights/biodiversity/stage4_kd")
 
     ap.add_argument("--out-dir", default="figures/graphical_abstract")
     ap.add_argument("--also-save-rgb-gt", action="store_true")
@@ -225,8 +228,8 @@ def main() -> None:
 
     out_dir = (repo_root / args.out_dir).resolve()
     save_png(out_dir / f"{args.img_id}_stage1_baseline.png", p1_rgb)
-    save_png(out_dir / f"{args.img_id}_stage4_hardxminority.png", p4_rgb)
-    save_png(out_dir / f"{args.img_id}_stage5_kd.png", p5_rgb)
+    save_png(out_dir / f"{args.img_id}_stage3_sampler.png", p4_rgb)
+    save_png(out_dir / f"{args.img_id}_stage4_kd.png", p5_rgb)
 
     if args.also_save_rgb_gt:
         save_png(out_dir / f"{args.img_id}_rgb.png", img_rgb)
@@ -234,8 +237,8 @@ def main() -> None:
 
     print("Saved to:", out_dir)
     print("Stage1 ckpt:", ckpt_s1)
-    print("Stage4 ckpt:", ckpt_s4)
-    print("Stage5 ckpt:", ckpt_s5)
+    print("Stage3 (sampler) ckpt:", ckpt_s4)
+    print("Stage4 (KD) ckpt:", ckpt_s5)
     print("Device:", device)
 
 

@@ -20,15 +20,14 @@ REPO_ROOT = find_repo_root()
 
 # ── Canonical stage definitions ─────────────────────────────────────────────
 
-# Paper ablation stages mapped to val evaluation-result folder paths.
-# Stage 3a (OEM pretrain) is omitted: it trains on OEM, not biodiversity,
-# so only Stage 3b (finetune) is reported in the ablation table.
+# Paper ablation stages mapped to val evaluation-result folder paths (4-stage, no-replication).
+# Stage 2a (OEM pre-train on the combined set) is omitted: it trains on OEM, not biodiversity,
+# so only the Biodiversity-finetuned endpoint (Stage 2b) is reported in the ablation table.
 STAGES = [
-    ("1",  "stage1_baseline"),
-    ("2",  "stage2_replication"),
-    ("3b", "stage3b_finetune"),
-    ("4",  "stage4_sampling"),
-    ("5",  "stage5_kd"),
+    ("1", "stage1_baseline"),
+    ("2", "stage2b_oem_finetune"),
+    ("3", "stage3_sampler"),
+    ("4", "stage4_kd"),
 ]
 
 VAL_ROOT = REPO_ROOT / "evaluation" / "evaluation_results" / "val"
@@ -68,8 +67,8 @@ def load_val_metrics(stage_dir: str) -> dict:
 
 
 def load_weights_tsv(path: Path | None = None) -> dict[str, float]:
-    """Load stage4_sampling_weights.tsv → {img_id: weight}."""
-    path = path or REPO_ROOT / "artifacts" / "stage4_sampling_weights.tsv"
+    """Load sampler_weights.tsv → {img_id: weight}."""
+    path = path or REPO_ROOT / "artifacts" / "sampler_weights.tsv"
     weights = {}
     with open(path, encoding="utf-8") as f:
         for line in f:

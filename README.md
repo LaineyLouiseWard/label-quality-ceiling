@@ -39,25 +39,28 @@ bash RUNBOOK.sh --from B1      # resume from training onward
 bash RUNBOOK.sh --from C1      # resume from evaluation onward
 ```
 
-Individual stages:
+Individual stages (4-stage, no-replication; teacher is built upstream — see `RUNBOOK.md`):
 
 ```bash
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage1_baseline.py
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2_replication.py
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3a_pretrain.py
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3b_finetune.py
-
-# Build Stage 4 sampling weights from Stage 3b checkpoint:
-PYTHONPATH=. python scripts/data_prep/build_stage4_weights.py \
-  --ckpt model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt \
-  --out  artifacts/stage4_sampling_weights.tsv
-
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage4_sampling.py
-PYTHONPATH=. python -m train.train_teacher    -c config/teacher/unet_oem.py
+# Teacher (built once, fixed across seeds):
+PYTHONPATH=. python -m train.train_teacher -c config/teacher/unet_oem.py
 PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
   --ckpt model_weights/teacher/teacher.ckpt \
   --out  pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
-PYTHONPATH=. python -m train.train_kd         -c config/biodiversity/stage5_kd.py
+PYTHONPATH=. python scripts/analysis/teacher_oem_to_gt_confusion.py   # grounds the OEM->student mappings
+
+# Student lineage:
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage1_baseline.py
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2a_oem_pretrain.py
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2b_oem_finetune.py
+
+# Build Stage 3 sampler weights from the Stage 2b checkpoint:
+PYTHONPATH=. python scripts/data_prep/build_sampler_weights.py \
+  --ckpt model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt \
+  --out  artifacts/sampler_weights.tsv
+
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_sampler.py
+PYTHONPATH=. python -m train.train_kd          -c config/biodiversity/stage4_kd.py
 ```
 
 ---
@@ -74,7 +77,7 @@ PYTHONPATH=. python evaluation/compute_metrics.py \
 # Held-out test set (final model only):
 PYTHONPATH=. python evaluation/compute_metrics.py \
   --split test \
-  --base-dir model_weights/biodiversity/stage5_kd \
+  --base-dir model_weights/biodiversity/stage4_kd \
   --data-root data/biodiversity_split/test
 ```
 
@@ -135,7 +138,7 @@ Users with licensed access should place files as follows:
 | OEM filtered subset | `data/openearthmap_filtered/` |
 | Stage checkpoints | `model_weights/biodiversity/<stage>/` |
 | OEM teacher weights | `pretrain_weights/` |
-| Stage 4 sampling weights | `artifacts/stage4_sampling_weights.tsv` |
+| Stage 3 sampler weights | `artifacts/sampler_weights.tsv` |
 | Pre-computed evaluation outputs | `evaluation/evaluation_results/` |
 
 ---

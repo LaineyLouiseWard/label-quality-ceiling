@@ -1,0 +1,15 @@
+{
+  "n_base_tiles": 1846,
+  "n_minority_tiles": 800,
+  "replica_counts_present": [
+    1
+  ],
+  "uniform_replica_count": 1,
+  "sum_weight_all": 1845.968516,
+  "sum_weight_minority": 1265.891474,
+  "P_min_current_replication_plus_sampler": 0.813592,
+  "P_min_norep_sampler_as_is": 0.68576,
+  "exposure_ratio_R_over_N": 1.186408,
+  "minority_weight_multiplier_to_match (s_match)": 2.0,
+  "note": "replacement=True => replication is weight-scaling. s_match\u2248(1+r) confirms a FULLY exposure-matched + step-matched no-rep arm is provably \u2248 the current arm (a null). The informative test is the NO-REP, SAMPLER-AS-IS arm at P_min_N (this lower exposure) \u2014 judged on Settlement/Semi-natural IoU vs the current arm."
+}

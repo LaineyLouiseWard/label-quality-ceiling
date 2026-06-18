@@ -5,7 +5,7 @@ scripts/figures/Figure06.py
 Stage 4 sampling weight distribution.
 
 Loads the pre-computed Stage 4 hardness × minority-aware sampling weights
-from artifacts/stage4_sampling_weights.tsv, computes summary statistics,
+from artifacts/sampler_weights.tsv, computes summary statistics,
 plots a histogram, and writes a numeric summary.
 
 Outputs:
@@ -36,7 +36,7 @@ def find_repo_root(start: Path) -> Path:
 
 repo_root = find_repo_root(Path(__file__).parent)
 
-WEIGHTS_TSV = repo_root / "artifacts" / "stage4_sampling_weights.tsv"
+WEIGHTS_TSV = repo_root / "artifacts" / "sampler_weights.tsv"
 OUT_PDF     = repo_root / "figures" / "Figure06.pdf"
 OUT_PDF.parent.mkdir(parents=True, exist_ok=True)
 

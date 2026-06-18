@@ -1,5 +1,5 @@
 """Fig 7: Example low- and high-weight Biodiversity tiles under hard x minority-aware
-sampling (Stage 4), annotated with tile difficulty, minority richness, and resulting weight.
+sampling (Stage 3), annotated with tile difficulty, minority richness, and resulting weight.
 
 Writes:
   figures/Figure07.pdf
@@ -25,37 +25,37 @@ if str(repo_root) not in sys.path:
 # -----------------------
 # Paths (NEW REPO)
 # -----------------------
-SPLIT_ROOT = repo_root / "data" / "biodiversity_split" / "train_rep"
+SPLIT_ROOT = repo_root / "data" / "biodiversity_split" / "train"
 MSK_DIR = SPLIT_ROOT / "masks"
 
 WEIGHTS_CANDIDATES = [
-    repo_root / "artifacts" / "stage4_sampling_weights.tsv",
+    repo_root / "artifacts" / "sampler_weights.tsv",
 ]
 
 OUT_DIR = repo_root / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_PDF = OUT_DIR / "Figure07.pdf"
 
-# Stage 3b checkpoint used to compute hardness (pixel error mass)
-STAGE3B_CKPT = repo_root / "model_weights" / "biodiversity" / "stage3b_finetune" / "stage3b_finetune.ckpt"
+# Stage 2b OEM-transfer checkpoint used to compute hardness (pixel error mass)
+STAGE2B_CKPT = repo_root / "model_weights" / "biodiversity" / "stage2b_oem_finetune" / "stage2b_oem_finetune.ckpt"
 
 print("Repo root:", repo_root)
 print("Masks dir:", MSK_DIR)
-print("Stage3b ckpt:", STAGE3B_CKPT)
+print("Stage2b ckpt:", STAGE2B_CKPT)
 print("Output:", OUT_PDF)
 
 assert MSK_DIR.exists(), f"Missing masks dir: {MSK_DIR}"
-assert STAGE3B_CKPT.exists(), (
-    f"Missing Stage 3b checkpoint: {STAGE3B_CKPT}\n"
-    "Hardness is computed from this checkpoint (as in scripts/data_prep/build_stage4_weights.py)."
+assert STAGE2B_CKPT.exists(), (
+    f"Missing Stage 2b checkpoint: {STAGE2B_CKPT}\n"
+    "Hardness is computed from this checkpoint (as in scripts/data_prep/build_sampler_weights.py)."
 )
 
 WEIGHTS_TSV = next((p for p in WEIGHTS_CANDIDATES if p.exists()), None)
 assert WEIGHTS_TSV is not None, (
-    "Missing Stage 4 weights TSV. Looked for:\n"
+    "Missing sampler weights TSV. Looked for:\n"
     + "\n".join([f"  - {p}" for p in WEIGHTS_CANDIDATES])
     + "\nGenerate with:\n"
-    "  python scripts/data_prep/build_stage4_weights.py --ckpt model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt"
+    "  python scripts/data_prep/build_sampler_weights.py --ckpt model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt"
 )
 
 print("Weights TSV:", WEIGHTS_TSV)
@@ -106,7 +106,7 @@ cmap = ListedColormap(colors)
 norm = BoundaryNorm(np.arange(-0.5, 6.5), cmap.N)
 
 # %%
-# Stage 4 weighting hyperparams (MUST match scripts/data_prep/build_stage4_weights.py defaults)
+# Sampler weighting hyperparams (MUST match scripts/data_prep/build_sampler_weights.py defaults)
 EPS = 1e-6
 BETA_TEMPER = 0.5      # (hardness + eps)^beta
 GAMMA_RICH = 1.0       # (richness + eps)^gamma
@@ -114,14 +114,14 @@ GAMMA_RICH = 1.0       # (richness + eps)^gamma
 # Note: final weight also includes clipping/normalisation/mixing; we read that from the TSV.
 
 def _norm_id(x: str) -> str:
-    """Strip _repN suffix so replicas share the same base weight (matches build_stage4_weights.py)."""
+    """Strip _repN suffix so replicas share the same base weight (matches build_sampler_weights.py)."""
     if "_rep" in x:
         base, rep = x.rsplit("_rep", 1)
         if rep.isdigit():
             return base
     return x
 
-def load_stage4_weight_map(weights_tsv: Path) -> dict[str, float]:
+def load_sampler_weight_map(weights_tsv: Path) -> dict[str, float]:
     m = {}
     with open(weights_tsv, "r", encoding="utf-8") as f:
         for line in f:
@@ -132,11 +132,11 @@ def load_stage4_weight_map(weights_tsv: Path) -> dict[str, float]:
             m[k] = float(w)
     return m
 
-w_map = load_stage4_weight_map(WEIGHTS_TSV)
+w_map = load_sampler_weight_map(WEIGHTS_TSV)
 w_vals = np.array(list(w_map.values()), dtype=np.float32)
-print("Loaded Stage4 weights:", len(w_vals), "min/med/max:", float(w_vals.min()), float(np.median(w_vals)), float(w_vals.max()))
+print("Loaded sampler weights:", len(w_vals), "min/med/max:", float(w_vals.min()), float(np.median(w_vals)), float(w_vals.max()))
 
-# pick representative "easy" and "hard" examples from final Stage4 weights
+# pick representative "easy" and "hard" examples from final sampler weights
 q_lo, q_hi = 0.10, 0.90
 w_lo = np.quantile(w_vals, q_lo)
 w_hi = np.quantile(w_vals, q_hi)
@@ -209,13 +209,13 @@ def load_student_from_lightning_ckpt(net: torch.nn.Module, ckpt_path: Path) -> t
 @torch.no_grad()
 def compute_hardness_error_fraction(img_id: str, data_root: Path, ckpt_path: Path, device: str = "cuda") -> float:
     """
-    Hardness proxy used by build_stage4_weights.py:
+    Hardness proxy used by build_sampler_weights.py:
       err = mean(pred != gt) over pixels.
     We compute it for the single tile (val_aug).
     """
     ds = BiodiversityTrainDataset(data_root=str(data_root), transform=val_aug)
 
-    # Find index by base id (train_rep includes reps; keys are base ids)
+    # Find index by base id (keys are base tile ids)
     target_idx = None
     for i, rid in enumerate(ds.img_ids):
         if _norm_id(rid) == img_id:
@@ -244,7 +244,7 @@ def compute_hardness_error_fraction(img_id: str, data_root: Path, ckpt_path: Pat
 def compute_minority_richness_fraction(mask_np: np.ndarray) -> float:
     # minority = Settlement(4) or SemiNatural(5)
     m = (mask_np == 4) | (mask_np == 5)
-    # exclude ignore index (0) from denom? build_stage4_weights.py uses mean over all pixels, incl bg
+    # exclude ignore index (0) from denom? build_sampler_weights.py uses mean over all pixels, incl bg
     # so we match it exactly: mean over full tile.
     return float(m.mean())
 
@@ -255,8 +255,8 @@ def component_weights_from_h_r(h: float, r: float) -> tuple[float, float]:
 
 # %%
 # Compute components for the two shown tiles
-easy_h = compute_hardness_error_fraction(easy_id, SPLIT_ROOT, STAGE3B_CKPT)
-hard_h = compute_hardness_error_fraction(hard_id, SPLIT_ROOT, STAGE3B_CKPT)
+easy_h = compute_hardness_error_fraction(easy_id, SPLIT_ROOT, STAGE2B_CKPT)
+hard_h = compute_hardness_error_fraction(hard_id, SPLIT_ROOT, STAGE2B_CKPT)
 
 easy_r = compute_minority_richness_fraction(easy_mask)
 hard_r = compute_minority_richness_fraction(hard_mask)

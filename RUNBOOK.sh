@@ -14,23 +14,34 @@ if ! python -c "import torch" >/dev/null 2>&1; then
 fi
 
 # ====================================================================
-# Full reproducibility pipeline
+# Full reproducibility pipeline — 4-stage, no-replication ablation
+#
+#   Stage 1  baseline
+#   Stage 2  OEM transfer        (2a pre-train on Bio+OEM -> 2b finetune on Bio)
+#   Stage 3  hard x minority sampler
+#   Stage 4  knowledge distillation (KD-B, grounded teacher->target mapping)
+#
+# The teacher is built UPSTREAM of the student lineage (teacher -> confusion ->
+# grounded OEM relabel -> student), because the OEM->student mappings are derived
+# from the teacher's measured confusion (see docs/KD_MAPPING_GROUNDING.md).
 #
 # Usage:
-#   bash RUNBOOK.sh              # run everything from A1
-#   bash RUNBOOK.sh --from B7    # resume from stage B7 onward
-#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh   # ALSO run the optional N4/N5 attribution null controls
+#   bash RUNBOOK.sh                      # run everything from A0
+#   bash RUNBOOK.sh --from B1            # resume from Stage 1 training onward
+#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh  # ALSO run the N3/N4 attribution null controls
+#   SEED=1 bash RUNBOOK.sh --from B1     # student lineage at seed 1 (teacher stays fixed at 42)
 #
-# Valid stages: A0 (taxonomy check), A1-A8, B1-B9, N4-N5 (optional null controls), C1-C4, D, E
+# Valid stages: A0 (taxonomy check), A1-A10 (data prep + teacher build),
+#               B1-B6 (student training), N3-N4 (optional null controls),
+#               C1-C4 (evaluation), D (analyses), E (figures)
 #
-# Overwrite flags:
-#   --overwrite  (data-prep scripts)
-#   --force      (training, evaluation, and export scripts)
+# Overwrite flags:  --overwrite (data-prep)   --force (training/eval/export)
 # ====================================================================
 
 # ---- Canonical paths ----
 BIO_RAW=data/biodiversity_raw
 OEM_RAW=data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD
+TEACHER_PTH=pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
 
 # ---- Parse --from argument ----
 FROM_STAGE="A0"
@@ -42,7 +53,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Ordered list of all stages
-STAGES=(A0 A1 A2 A3 A4 A5 A6 A7 A8 B1 B2 B3 B4 B5 B6 B7 B8 B9 N4 N5 C1 C2 C3 C4 D E)
+STAGES=(A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 B1 B2 B3 B4 B5 B6 N3 N4 C1 C2 C3 C4 D E)
 
 # Validate --from value
 valid=false
@@ -93,19 +104,21 @@ require_file() {
 }
 
 echo "================================================================"
-echo " PIPELINE -- running from stage $FROM_STAGE onward"
+echo " PIPELINE -- running from stage $FROM_STAGE onward  (SEED=${SEED:-42})"
 echo "================================================================"
 echo ""
 
 # ======================== A0. PRE-FLIGHT CHECK =======================
 
 if run_stage A0; then
-  echo "[A0] Verifying taxonomy consistency (class orders / OEM->student KD mapping)"
-  # Aborts the whole run (set -e) if any class order/index has drifted from geoseg/taxonomy.py.
+  echo "[A0] Verifying taxonomy consistency (class orders / grounded OEM->student mappings)"
+  # Aborts the whole run (set -e) if any class order/index has drifted from geoseg/taxonomy.py,
+  # or if the grounded pre-train map != argmax(teacher confusion) when the confusion artifact exists.
   PYTHONPATH=. python scripts/verify_taxonomy_consistency.py
 fi
 
-# ======================== A. DATA PREPARATION ========================
+# ======================== A. DATA PREP + TEACHER BUILD ===============
+# Order reflects the dependency teacher -> confusion -> grounded mappings -> OEM relabel -> student.
 
 if run_stage A1; then
   echo "[A1] Splitting Biodiversity into train / val / test"
@@ -117,7 +130,7 @@ fi
 
 if run_stage A2; then
   require_nonempty data/biodiversity_split/train/masks A1
-  echo "[A2] Identifying minority-rich tiles"
+  echo "[A2] Identifying minority-rich tiles (for the D-stage sampler-uplift analysis)"
   PYTHONPATH=. python scripts/data_prep/analyze_class_distribution.py \
     --data-root data/biodiversity_split/train \
     --out       artifacts/train_augmentation_list.json \
@@ -125,56 +138,16 @@ if run_stage A2; then
 fi
 
 if run_stage A3; then
-  require_nonempty data/biodiversity_split/train/images A1
-  require_file artifacts/train_augmentation_list.json A2
-  echo "[A3] Replicating minority samples"
-  PYTHONPATH=. python scripts/data_prep/replicate_minority_samples.py \
-    --data-root          data/biodiversity_split/train \
-    --augmentation-list  artifacts/train_augmentation_list.json \
-    --out-root           data/biodiversity_split/train_rep \
-    --overwrite
-fi
-
-if run_stage A4; then
-  echo "[A4] Filtering OEM (pre-mapping, rural tiles only)"
+  echo "[A3] Filtering OEM (pre-mapping, rural tiles only)"
   PYTHONPATH=. python scripts/data_prep/filter_oem_rural.py \
     --raw-root "$OEM_RAW" \
     --out-root data/openearthmap_filtered \
     --overwrite
 fi
 
-if run_stage A5; then
-  require_nonempty data/openearthmap_filtered/masks A4
-  echo "[A5] Relabelling OEM to 6-class taxonomy"
-  PYTHONPATH=. python scripts/data_prep/relabel_oem_taxonomy.py \
-    --in-root  data/openearthmap_filtered \
-    --out-root data/openearthmap_relabelled \
-    --overwrite
-fi
-
-if run_stage A6; then
-  require_nonempty data/openearthmap_relabelled/masks A5
-  echo "[A6] Filtering OEM (post-mapping, settlement-dominant)"
-  PYTHONPATH=. python scripts/data_prep/filter_oem_settlement_postmap.py \
-    --in-root  data/openearthmap_relabelled \
-    --out-root data/openearthmap_relabelled_filtered \
-    --overwrite
-fi
-
-if run_stage A7; then
-  require_nonempty data/biodiversity_split/train/images A1
-  require_nonempty data/openearthmap_relabelled_filtered/masks A6
-  echo "[A7] Creating combined Biodiversity + OEM dataset"
-  PYTHONPATH=. python scripts/data_prep/create_biodiversity_oem_combined.py \
-    --bio-root data/biodiversity_split \
-    --oem-root data/openearthmap_relabelled_filtered \
-    --out-root data/biodiversity_oem_combined \
-    --overwrite
-fi
-
-if run_stage A8; then
-  require_nonempty "$OEM_RAW" A4
-  echo "[A8] Preparing OEM teacher training split (FULL OEM, native 9-class taxonomy)"
+if run_stage A4; then
+  require_nonempty "$OEM_RAW" A3
+  echo "[A4] Preparing OEM teacher training split (FULL OEM, native 9-class taxonomy)"
   # Teacher trains on the FULL OEM (~3,500 tiles), NOT the rural-filtered subset:
   # the rural filter strips settlement-rich tiles, which would weaken the very
   # minority-class signal KD injects. Native labels 0..8 are preserved.
@@ -185,7 +158,67 @@ if run_stage A8; then
     --overwrite
 fi
 
-# ======================== B. TRAINING ================================
+if run_stage A5; then
+  require_nonempty data/openearthmap_teacher/train/images A4
+  echo "[A5] Training OEM teacher (seed fixed at 42 — build-once, seed-invariant artifact)"
+  # The teacher is held FIXED across the seed campaign (like the data), so it is NOT reseeded.
+  PYTHONPATH=. python -m train.train_teacher \
+    -c config/teacher/unet_oem.py --force
+fi
+
+if run_stage A6; then
+  require_file model_weights/teacher/teacher.ckpt A5
+  echo "[A6] Exporting teacher checkpoint + verifying native-A output channels"
+  PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
+    --ckpt model_weights/teacher/teacher.ckpt \
+    --out  "$TEACHER_PTH" \
+    --force
+  # Aborts the run (set -e) if the teacher is not native-A — e.g. a stale 6-class checkpoint.
+  PYTHONPATH=. python scripts/verify_teacher_channels.py \
+    --ckpt "$TEACHER_PTH" \
+    --data-root data/openearthmap_teacher/val
+fi
+
+if run_stage A7; then
+  require_file "$TEACHER_PTH" A6
+  require_nonempty data/biodiversity_split/train/masks A1
+  echo "[A7] Measuring teacher->GT confusion on the training set (grounds the OEM->student mappings)"
+  # Writes artifacts/teacher_oem_gt_confusion.npz (committed; the grounded pre-train map in
+  # taxonomy.py is its argmax and the campaign KD map is its row-normalised soft form -- A0 asserts this).
+  PYTHONPATH=. python scripts/analysis/teacher_oem_to_gt_confusion.py
+fi
+
+if run_stage A8; then
+  require_nonempty data/openearthmap_filtered/masks A3
+  echo "[A8] Relabelling OEM to the 6-class taxonomy (grounded argmax mapping)"
+  PYTHONPATH=. python scripts/data_prep/relabel_oem_taxonomy.py \
+    --in-root  data/openearthmap_filtered \
+    --out-root data/openearthmap_relabelled \
+    --overwrite
+fi
+
+if run_stage A9; then
+  require_nonempty data/openearthmap_relabelled/masks A8
+  echo "[A9] Filtering OEM (post-mapping, settlement-dominant removal)"
+  PYTHONPATH=. python scripts/data_prep/filter_oem_settlement_postmap.py \
+    --in-root  data/openearthmap_relabelled \
+    --out-root data/openearthmap_relabelled_filtered \
+    --overwrite
+fi
+
+if run_stage A10; then
+  require_nonempty data/biodiversity_split/train/images A1
+  require_nonempty data/openearthmap_relabelled_filtered/masks A9
+  echo "[A10] Creating combined Biodiversity + OEM dataset (Stage 2a pre-training pool)"
+  PYTHONPATH=. python scripts/data_prep/create_biodiversity_oem_combined.py \
+    --bio-root data/biodiversity_split \
+    --oem-root data/openearthmap_relabelled_filtered \
+    --out-root data/biodiversity_oem_combined \
+    --overwrite
+fi
+
+# ======================== B. STUDENT LINEAGE =========================
+# Seed-varying. Honours $SEED (default 42) in train_supervision / train_kd.
 
 if run_stage B1; then
   require_nonempty data/biodiversity_split/train/images A1
@@ -195,100 +228,72 @@ if run_stage B1; then
 fi
 
 if run_stage B2; then
-  require_nonempty data/biodiversity_split/train_rep/images A3
-  echo "[B2] Stage 2: Minority replication"
+  require_nonempty data/biodiversity_oem_combined/train/images A10
+  echo "[B2] Stage 2a: OEM pre-training (combined Bio + OEM)"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage2_replication.py --force
+    -c config/biodiversity/stage2a_oem_pretrain.py --force
 fi
 
 if run_stage B3; then
-  require_nonempty data/biodiversity_oem_combined/train/images A7
-  echo "[B3] Stage 3a: OEM pre-training"
+  require_file model_weights/biodiversity/stage2a_oem_pretrain/stage2a_oem_pretrain.ckpt B2
+  echo "[B3] Stage 2b: OEM-transfer finetune on Biodiversity (init from 2a)"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage3a_pretrain.py --force
+    -c config/biodiversity/stage2b_oem_finetune.py --force
 fi
 
 if run_stage B4; then
-  require_file model_weights/biodiversity/stage3a_pretrain/stage3a_pretrain.ckpt B3
-  echo "[B4] Stage 3b: Fine-tune (init from 3a)"
-  PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage3b_finetune.py --force
-fi
-
-if run_stage B5; then
-  require_file model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt B4
-  require_nonempty data/biodiversity_split/train_rep/images A3
-  echo "[B5] Building Stage 4 sampling weights"
-  PYTHONPATH=. python scripts/data_prep/build_stage4_weights.py \
-    --ckpt      model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt \
-    --out       artifacts/stage4_sampling_weights.tsv \
-    --data_root data/biodiversity_split/train_rep \
+  require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
+  require_nonempty data/biodiversity_split/train/images A1
+  echo "[B4] Building hard x minority sampler weights (from the Stage 2b checkpoint)"
+  PYTHONPATH=. python scripts/data_prep/build_sampler_weights.py \
+    --ckpt      model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt \
+    --out       artifacts/sampler_weights.tsv \
+    --data_root data/biodiversity_split/train \
     --batch_size 2 --num_workers 4 \
     --force
 fi
 
-if run_stage B6; then
-  require_file model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt B4
-  require_file artifacts/stage4_sampling_weights.tsv B5
-  echo "[B6] Stage 4: Hard x minority sampling"
+if run_stage B5; then
+  require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
+  require_file artifacts/sampler_weights.tsv B4
+  echo "[B5] Stage 3: Hard x minority sampling"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage4_sampling.py --force
+    -c config/biodiversity/stage3_sampler.py --force
 fi
 
-if run_stage B7; then
-  require_nonempty data/openearthmap_teacher/train/images A8
-  echo "[B7] Training OEM teacher"
-  PYTHONPATH=. python -m train.train_teacher \
-    -c config/teacher/unet_oem.py --force
-fi
-
-if run_stage B8; then
-  require_file model_weights/teacher/teacher.ckpt B7
-  echo "[B8] Exporting teacher checkpoint"
-  PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
-    --ckpt model_weights/teacher/teacher.ckpt \
-    --out  pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
-    --force
-  echo "[B8] Verifying exported teacher outputs native-A channels (gate before KD)"
-  # Aborts the run (set -e) if the teacher is not native-A — e.g. a stale 6-class checkpoint.
-  PYTHONPATH=. python scripts/verify_teacher_channels.py \
-    --ckpt pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
-    --data-root data/openearthmap_teacher/val
-fi
-
-if run_stage B9; then
-  require_file model_weights/biodiversity/stage4_sampling/stage4_sampling.ckpt B6
-  require_file pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth B8
-  echo "[B9] Re-verifying teacher is native-A before KD (guards --from B9 resumes / stale .pth)"
+if run_stage B6; then
+  require_file model_weights/biodiversity/stage3_sampler/stage3_sampler.ckpt B5
+  require_file "$TEACHER_PTH" A6
+  echo "[B6] Re-verifying teacher is native-A before KD (guards --from B6 resumes / stale .pth)"
   # Hard gate: aborts (set -e) rather than silently distilling from a stale/6-class teacher.
   PYTHONPATH=. python scripts/verify_teacher_channels.py \
-    --ckpt pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth \
+    --ckpt "$TEACHER_PTH" \
     --data-root data/openearthmap_teacher/val
-  echo "[B9] Stage 5: Knowledge distillation"
+  echo "[B6] Stage 4: Knowledge distillation (KD-B, grounded mapping)"
   PYTHONPATH=. python -m train.train_kd \
-    -c config/biodiversity/stage5_kd.py --force
+    -c config/biodiversity/stage4_kd.py --force
 fi
 
 # ============= N. NULL CONTROLS (optional; export RUN_NULL_CONTROLS=1) ===============
-# Off by default. Two attribution controls that isolate each warm-start stage's NAMED mechanism
-# from the extra-epochs effect (each differs from its parent stage in EXACTLY one component):
-#   N4 = Stage 3b continued WITHOUT the sampler  ->  Stage4 - N4 = the sampler's effect
-#   N5 = Stage 4 continued WITHOUT KD            ->  Stage5 - N5 = KD's effect
-# They init from the same checkpoints as Stage 4 / Stage 5, run the same 45 epochs, and are
-# evaluated automatically by C1 (compute_metrics rglobs all checkpoints under model_weights).
+# Off by default. Two attribution controls, each differing from its parent stage in EXACTLY one
+# component, isolating the named mechanism from the +45-epoch / draw-count effect:
+#   N3 = Stage 2b continued WITH uniform draws (no weighting)  ->  Stage3 - N3 = the sampler's effect
+#   N4 = Stage 3 continued WITHOUT KD                          ->  Stage4 - N4 = KD's effect
+# (N4 is the MANDATORY per-seed control in the 5-seed campaign.) Both run the same 45 epochs and
+# 2646 draws/epoch as their parent, and are evaluated automatically by C1.
 
-if run_stage N4 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
-  require_file model_weights/biodiversity/stage3b_finetune/stage3b_finetune.ckpt B4
-  echo "[N4] Null control: Stage 3b continued WITHOUT the hard x minority sampler"
+if run_stage N3 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
+  require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
+  echo "[N3] Null control: Stage 2b continued WITHOUT the hard x minority weighting (uniform draws)"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage4null_nosampler.py --force
+    -c config/biodiversity/stage3null_nosampler.py --force
 fi
 
-if run_stage N5 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
-  require_file model_weights/biodiversity/stage4_sampling/stage4_sampling.ckpt B6
-  echo "[N5] Null control: Stage 4 continued WITHOUT knowledge distillation"
+if run_stage N4 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
+  require_file model_weights/biodiversity/stage3_sampler/stage3_sampler.ckpt B5
+  echo "[N4] Null control: Stage 3 continued WITHOUT knowledge distillation"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage5null_nokd.py --force
+    -c config/biodiversity/stage4null_nokd.py --force
 fi
 
 # ======================== C. EVALUATION ==============================
@@ -307,9 +312,9 @@ fi
 
 if run_stage C2; then
   require_file model_weights/biodiversity/stage1_baseline/stage1_baseline.ckpt B1
-  require_file model_weights/biodiversity/stage5_kd/stage5_kd.ckpt B9
+  require_file model_weights/biodiversity/stage4_kd/stage4_kd.ckpt B6
   require_nonempty data/biodiversity_split/test/images A1
-  echo "[C2] Evaluating held-out test set (Stage 1 baseline + Stage 5 final; intermediate stages not on test)"
+  echo "[C2] Evaluating held-out test set (Stage 1 baseline + Stage 4 final; intermediate stages not on test)"
   # Baseline AND final on the test split — C4 (export_final_test_table) needs both metrics.json files.
   PYTHONPATH=. python evaluation/compute_metrics.py \
     --split test \
@@ -319,7 +324,7 @@ if run_stage C2; then
     --force
   PYTHONPATH=. python evaluation/compute_metrics.py \
     --split test \
-    --base-dir model_weights/biodiversity/stage5_kd \
+    --base-dir model_weights/biodiversity/stage4_kd \
     --data-root data/biodiversity_split/test \
     --out-dir evaluation/evaluation_results/test \
     --force
@@ -343,7 +348,7 @@ fi
 
 if run_stage D; then
   require_nonempty evaluation/evaluation_results/val C1
-  require_nonempty model_weights/biodiversity B9   # fail fast before running a1-a6
+  require_nonempty model_weights/biodiversity B6   # fail fast before running a1-a6
   echo "[D] Running supplementary analyses (A1-A6)"
   PYTHONPATH=. python scripts/analysis/a1_minority_recall.py
   PYTHONPATH=. python scripts/analysis/a2_symmetric_confusion.py

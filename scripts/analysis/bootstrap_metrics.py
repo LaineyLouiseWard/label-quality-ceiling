@@ -50,10 +50,9 @@ CLASS_NAMES_5 = ["Forest", "Grassland", "Cropland", "Settlement", "Seminatural"]
 
 STAGES = {
     "stage1_baseline": REPO / "model_weights" / "biodiversity" / "stage1_baseline" / "stage1_baseline.ckpt",
-    "stage2_replication": REPO / "model_weights" / "biodiversity" / "stage2_replication" / "stage2_replication.ckpt",
-    "stage3b_finetune": REPO / "model_weights" / "biodiversity" / "stage3b_finetune" / "stage3b_finetune.ckpt",
-    "stage4_sampling": REPO / "model_weights" / "biodiversity" / "stage4_sampling" / "stage4_sampling.ckpt",
-    "stage5_kd": REPO / "model_weights" / "biodiversity" / "stage5_kd" / "stage5_kd.ckpt",
+    "stage2b_oem_finetune": REPO / "model_weights" / "biodiversity" / "stage2b_oem_finetune" / "stage2b_oem_finetune.ckpt",
+    "stage3_sampler": REPO / "model_weights" / "biodiversity" / "stage3_sampler" / "stage3_sampler.ckpt",
+    "stage4_kd": REPO / "model_weights" / "biodiversity" / "stage4_kd" / "stage4_kd.ckpt",
 }
 
 
@@ -244,12 +243,12 @@ def main():
             lines.append(f"| {c} | {iou_val:.1%} | [{lo:.1%}, {hi:.1%}] |")
         lines.append("")
 
-    # ── Stage 1→5 delta CI ──────────────────────────────────────────────────
+    # ── Stage 1→4 delta CI ──────────────────────────────────────────────────
     for split in ("val", "test"):
         s1 = all_results.get(f"stage1_baseline/{split}")
-        s5 = all_results.get(f"stage5_kd/{split}")
+        s5 = all_results.get(f"stage4_kd/{split}")
         if s1 and s5:
-            lines.append(f"## Stage 1→5 improvement ({split})")
+            lines.append(f"## Stage 1→4 improvement ({split})")
             for metric in ("mIoU", "mF1", "OA"):
                 delta = s5["point"][metric] - s1["point"][metric]
                 # Delta of values rounded to 1 dp -- the convention used in the manuscript

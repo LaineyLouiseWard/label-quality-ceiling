@@ -225,10 +225,9 @@ def main() -> None:
         mask_exts=(".tif", ".tiff"),
     )
 
-    # ---- D) Biodiversity split + replication ----
+    # ---- D) Biodiversity split (no replication) ----
     biodiv_split_root = data_root / "biodiversity_split"
     biodiv_train = count_paired_dir(name="Biodiversity train", root=biodiv_split_root / "train")
-    biodiv_train_rep = count_paired_dir(name="Biodiversity train_rep", root=biodiv_split_root / "train_rep")
     biodiv_val = count_paired_dir(name="Biodiversity val", root=biodiv_split_root / "val")
     biodiv_test = count_paired_dir(name="Biodiversity test", root=biodiv_split_root / "test")
 
@@ -257,7 +256,6 @@ def main() -> None:
 
     print_block("D) Biodiversity splits (training / eval)")
     print_counts_row(biodiv_train)
-    print_counts_row(biodiv_train_rep)
     print_counts_row(biodiv_val)
     print_counts_row(biodiv_test)
 
@@ -266,13 +264,13 @@ def main() -> None:
     print_counts_row(combined_val)
     print_counts_row(combined_test)
 
-    print_block("F) Stage-wise pools (paper-facing)")
-    print(f"{'Stage 1–2':<12} Biodiversity train/train_rep pool: {fmt(biodiv_train.paired)} / {fmt(biodiv_train_rep.paired)} paired tiles")
-    print(f"{'Stage 3–4':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles (same pool; different sampling/cropping)")
-    print(f"{'Stage 5 pre':<12} Combined pretrain train pool:     {fmt(combined_train.paired)} paired tiles")
-    print(f"{'Stage 5 ft':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles")
-    print(f"{'Stage 5':<12} Biodiversity train_rep pool:       {fmt(biodiv_train_rep.paired)} paired tiles (teacher supervision)")
-    print(f"{'Eval':<12} Biodiversity val/test pools:       {fmt(biodiv_val.paired)} / {fmt(biodiv_test.paired)} paired tiles")
+    print_block("F) Stage-wise pools (paper-facing; 4-stage, no replication)")
+    print(f"{'Stage 1':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles")
+    print(f"{'Stage 2a':<12} Combined pretrain train pool:     {fmt(combined_train.paired)} paired tiles (Biodiversity + OEM)")
+    print(f"{'Stage 2b':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (OEM-transfer finetune)")
+    print(f"{'Stage 3':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (hard x minority sampler)")
+    print(f"{'Stage 4':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (sampler + teacher KD)")
+    print(f"{'Eval':<12} Biodiversity val/test pools:      {fmt(biodiv_val.paired)} / {fmt(biodiv_test.paired)} paired tiles")
 
     if args.out_json:
         out_path = (repo_root / args.out_json).resolve()
@@ -290,7 +288,6 @@ def main() -> None:
                 "openearthmap_teacher_train": asdict(oem_teacher_train),
                 "openearthmap_teacher_val": asdict(oem_teacher_val),
                 "biodiversity_train": asdict(biodiv_train),
-                "biodiversity_train_rep": asdict(biodiv_train_rep),
                 "biodiversity_val": asdict(biodiv_val),
                 "biodiversity_test": asdict(biodiv_test),
                 "combined_train": asdict(combined_train),

@@ -51,8 +51,8 @@ check(list(map(list, tax.STUDENT_PALETTE)) ==
 check(tuple(tax.OEM_NATIVE_CLASSES) ==
       ("Unknown", "Bareland", "Rangeland", "Developed", "Road", "Tree", "Water", "Agriculture", "Building"),
       "OEM_NATIVE_CLASSES changed from the verified native-A order")
-check(dict(tax.OEM_TO_STUDENT_PRETRAIN) == {0: 0, 1: 0, 2: 2, 3: 4, 4: 4, 5: 1, 6: 0, 7: 3, 8: 4},
-      "OEM_TO_STUDENT_PRETRAIN changed from the verified pre-training map")
+check(dict(tax.OEM_TO_STUDENT_PRETRAIN) == {0: 0, 1: 5, 2: 2, 3: 4, 4: 4, 5: 1, 6: 2, 7: 2, 8: 4},
+      "OEM_TO_STUDENT_PRETRAIN changed from the grounded pre-training map (argmax of teacher confusion)")
 check(tuple(tax.MINORITY_INDICES) == (4, 5) and tax.BACKGROUND_INDEX == 0,
       "MINORITY_INDICES / BACKGROUND_INDEX changed")
 
@@ -86,13 +86,26 @@ check(nonzero == EXPECTED_M, f"KD matrix entries changed from verified native-A:
 from scripts.data_prep.relabel_oem_taxonomy import OEM_ID_TO_TARGET6
 check(dict(OEM_ID_TO_TARGET6) == dict(tax.OEM_TO_STUDENT_PRETRAIN), "relabel OEM_ID_TO_TARGET6 != taxonomy")
 
-# Pretrain and KD maps must agree on every NON-dagger class (all but bareland=1 and rangeland=2)
-kd_argmax = {o: max(t, key=lambda kv: kv[1])[0] for o, t in tax.oem_to_student_kd(0.7).items()}
-for o in range(9):
-    if o in (1, 2):
-        continue
-    check(tax.OEM_TO_STUDENT_PRETRAIN[o] == kd_argmax[o],
-          f"pretrain/KD disagree on non-dagger OEM class {o}")
+# GROUNDED MAPPINGS: the pre-train map must be the argmax of the teacher's empirical confusion, and the
+# campaign KD map (build_mapping_from_confusion("B")) must be its row-normalised soft form -- so
+# pretrain == argmax(KD) holds for ALL classes by construction (no daggers). Checked against the saved
+# confusion artifact when present; skipped on a fresh clone before the teacher/confusion exist.
+import os as _os
+import numpy as _np
+_CONF = "artifacts/teacher_oem_gt_confusion.npz"
+if _os.path.exists(_CONF):
+    _soft = _np.load(_CONF, allow_pickle=True)["soft"].astype(float)
+    _argmax = {o: int(_soft[o].argmax()) for o in range(9)}
+    for o in range(9):
+        check(tax.OEM_TO_STUDENT_PRETRAIN[o] == _argmax[o],
+              f"pretrain OEM class {o} ({tax.OEM_TO_STUDENT_PRETRAIN[o]}) != argmax(teacher confusion) ({_argmax[o]})")
+    from geoseg.utils.kd_utils import build_mapping_from_confusion
+    _B = build_mapping_from_confusion("B")
+    for o in range(9):
+        check(int(_B[o].argmax()) == tax.OEM_TO_STUDENT_PRETRAIN[o],
+              f"KD-B argmax for OEM class {o} != grounded pretrain target")
+else:
+    print(f"  (skipped grounded-mapping checks: {_CONF} not present yet)")
 
 # ---------------------------------------------------------------------------
 # 3. DRIFT GUARD — remaining scattered copies still agree by order/index
