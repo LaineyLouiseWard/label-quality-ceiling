@@ -23,12 +23,16 @@ set -euo pipefail
 
 SEEDS=(42 43 44 45 46)            # LOCKED campaign seed set
 ROOT_SEED=42                      # the seed that lives in this repo (others = worktrees)
-BRANCH=seed-campaign-prep
 TEACHER=pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # this repo = root seed
 STATE="$ROOT/.campaign"
 mkdir -p "$STATE"
+
+# Pin worktrees to the root's current commit, DETACHED (not a branch): a branch can
+# only be checked out in one worktree, and the seeds only ever write gitignored
+# outputs, so they never need their own branch. Keep the code fixed during the run.
+CAMPAIGN_COMMIT="$(cd "$ROOT" && git rev-parse HEAD)"
 
 # Fail fast if the conda env is not active (else the first seed dies hours in).
 if ! python -c "import torch" >/dev/null 2>&1; then
@@ -59,7 +63,7 @@ for SEED in "${SEEDS[@]}"; do
   else
     DIR="$(dirname "$ROOT")/$(basename "$ROOT")_seed$SEED"
     # Create the worktree + shared symlinks on first touch (all idempotent).
-    [ -d "$DIR" ] || run git -C "$ROOT" worktree add "$DIR" "$BRANCH"
+    [ -d "$DIR" ] || run git -C "$ROOT" worktree add --detach "$DIR" "$CAMPAIGN_COMMIT"
     run ln -sfn "$ROOT/data" "$DIR/data"
     run mkdir -p "$DIR/pretrain_weights"
     run ln -sfn "$ROOT/$TEACHER" "$DIR/$TEACHER"
