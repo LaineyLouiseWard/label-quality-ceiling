@@ -26,16 +26,21 @@ fi
 # from the teacher's measured confusion (see docs/KD_MAPPING_GROUNDING.md).
 #
 # Usage:
-#   bash RUNBOOK.sh                      # run everything from A0
-#   bash RUNBOOK.sh --from B1            # resume from Stage 1 training onward
-#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh  # ALSO run the N3/N4 attribution null controls
-#   SEED=1 bash RUNBOOK.sh --from B1     # student lineage at seed 1 (teacher stays fixed at 42)
+#   bash RUNBOOK.sh                          # run everything from A0
+#   bash RUNBOOK.sh --from B1                # resume from Stage 1 training onward
+#   bash RUNBOOK.sh --from B1 --to C2        # run a stage WINDOW (Stage 1 .. test eval)
+#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh      # ALSO run the N3/N4 attribution null controls
+#   SEED=1 bash RUNBOOK.sh --from B1         # student lineage at seed 1 (teacher fixed at 42)
+#   RESUME=1 bash RUNBOOK.sh --from B1       # resume training stages from their last.ckpt (no --force)
 #
 # Valid stages: A0 (taxonomy check), A1-A10 (data prep + teacher build),
 #               B1-B6 (student training), N3-N4 (optional null controls),
 #               C1-C4 (evaluation), D (analyses), E (figures)
 #
+# For the full 5-seed campaign as ONE resumable command, use ./run_campaign.sh.
+#
 # Overwrite flags:  --overwrite (data-prep)   --force (training/eval/export)
+# Window flags:     --from <stage>  --to <stage>      Resume:  RESUME=1 (training stages)
 # ====================================================================
 
 # ---- Canonical paths ----
@@ -43,11 +48,13 @@ BIO_RAW=data/biodiversity_raw
 OEM_RAW=data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD
 TEACHER_PTH=pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
 
-# ---- Parse --from argument ----
+# ---- Parse --from / --to arguments ----
 FROM_STAGE="A0"
+TO_STAGE=""          # empty = run through the last stage
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --from) FROM_STAGE="$2"; shift 2 ;;
+    --to)   TO_STAGE="$2";   shift 2 ;;
     *) echo "Unknown argument: $1"; exit 1 ;;
   esac
 done
@@ -72,12 +79,32 @@ for i in "${!STAGES[@]}"; do
   if [[ "${STAGES[$i]}" == "$FROM_STAGE" ]]; then from_idx=$i; break; fi
 done
 
-# Helper: should we run this stage?
+# Default TO = last stage; validate it; find its index
+[ -z "$TO_STAGE" ] && TO_STAGE="${STAGES[$((${#STAGES[@]}-1))]}"
+valid=false
+for s in "${STAGES[@]}"; do
+  if [[ "$s" == "$TO_STAGE" ]]; then valid=true; break; fi
+done
+if ! $valid; then
+  echo "ERROR: Invalid stage '$TO_STAGE'"
+  echo "  Valid stages: ${STAGES[*]}"
+  exit 1
+fi
+to_idx=0
+for i in "${!STAGES[@]}"; do
+  if [[ "${STAGES[$i]}" == "$TO_STAGE" ]]; then to_idx=$i; break; fi
+done
+if [[ $from_idx -gt $to_idx ]]; then
+  echo "ERROR: --from $FROM_STAGE is after --to $TO_STAGE"
+  exit 1
+fi
+
+# Helper: should we run this stage? (within the [from, to] window)
 run_stage() {
   local stage="$1"
   for i in "${!STAGES[@]}"; do
     if [[ "${STAGES[$i]}" == "$stage" ]]; then
-      [[ $i -ge $from_idx ]] && return 0 || return 1
+      [[ $i -ge $from_idx && $i -le $to_idx ]] && return 0 || return 1
     fi
   done
   return 1
@@ -103,8 +130,19 @@ require_file() {
   fi
 }
 
+# ---- Resume mode -----------------------------------------------------------
+# RESUME=1 drops --force from the heavy training stages so an interrupted run
+# picks up from its per-stage last.ckpt (model+optimizer+scheduler+epoch, written
+# every epoch via save_last=True). Completed stages no-op (last.ckpt already at
+# max_epoch); the interrupted stage continues mid-training; later stages run fresh.
+# Default (unset) keeps --force = always start each stage from scratch.
+FORCE_TRAIN="--force"
+if [ "${RESUME:-0}" = "1" ]; then
+  FORCE_TRAIN=""
+fi
+
 echo "================================================================"
-echo " PIPELINE -- running from stage $FROM_STAGE onward  (SEED=${SEED:-42})"
+echo " PIPELINE -- stages $FROM_STAGE..$TO_STAGE  (SEED=${SEED:-42}, RESUME=${RESUME:-0})"
 echo "================================================================"
 echo ""
 
@@ -224,21 +262,21 @@ if run_stage B1; then
   require_nonempty data/biodiversity_split/train/images A1
   echo "[B1] Stage 1: Baseline"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage1_baseline.py --force
+    -c config/biodiversity/stage1_baseline.py $FORCE_TRAIN
 fi
 
 if run_stage B2; then
   require_nonempty data/biodiversity_oem_combined/train/images A10
   echo "[B2] Stage 2a: OEM pre-training (combined Bio + OEM)"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage2a_oem_pretrain.py --force
+    -c config/biodiversity/stage2a_oem_pretrain.py $FORCE_TRAIN
 fi
 
 if run_stage B3; then
   require_file model_weights/biodiversity/stage2a_oem_pretrain/stage2a_oem_pretrain.ckpt B2
   echo "[B3] Stage 2b: OEM-transfer finetune on Biodiversity (init from 2a)"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage2b_oem_finetune.py --force
+    -c config/biodiversity/stage2b_oem_finetune.py $FORCE_TRAIN
 fi
 
 if run_stage B4; then
@@ -258,7 +296,7 @@ if run_stage B5; then
   require_file artifacts/sampler_weights.tsv B4
   echo "[B5] Stage 3: Hard x minority sampling"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage3_sampler.py --force
+    -c config/biodiversity/stage3_sampler.py $FORCE_TRAIN
 fi
 
 if run_stage B6; then
@@ -271,7 +309,7 @@ if run_stage B6; then
     --data-root data/openearthmap_teacher/val
   echo "[B6] Stage 4: Knowledge distillation (KD-B, grounded mapping)"
   PYTHONPATH=. python -m train.train_kd \
-    -c config/biodiversity/stage4_kd.py --force
+    -c config/biodiversity/stage4_kd.py $FORCE_TRAIN
 fi
 
 # ============= N. NULL CONTROLS (optional; export RUN_NULL_CONTROLS=1) ===============
@@ -286,14 +324,14 @@ if run_stage N3 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
   require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
   echo "[N3] Null control: Stage 2b continued WITHOUT the hard x minority weighting (uniform draws)"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage3null_nosampler.py --force
+    -c config/biodiversity/stage3null_nosampler.py $FORCE_TRAIN
 fi
 
 if run_stage N4 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
   require_file model_weights/biodiversity/stage3_sampler/stage3_sampler.ckpt B5
   echo "[N4] Null control: Stage 3 continued WITHOUT knowledge distillation"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage4null_nokd.py --force
+    -c config/biodiversity/stage4null_nokd.py $FORCE_TRAIN
 fi
 
 # ======================== C. EVALUATION ==============================

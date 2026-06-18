@@ -29,6 +29,8 @@ evaluation/evaluation_results/
 analysis/per_tile_cms/
 analysis/*.npz
 analysis/bootstrap_results.*
+analysis/seed_aggregate/
+.campaign/
 figures/*.pdf
 artifacts/tile_number_metrics.json
 artifacts/sampler_weights.tsv
