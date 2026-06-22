@@ -1,5 +1,3 @@
-> **⚠ STALE — superseded; current state 2026-06-21.** This doc may describe a RETIRED pipeline. CURRENT: Stage-3 sampler = **clsbal** (A0 `stage3_sampler`/`sampler_weights.tsv` retired); the OEM-KD teacher and `stage4_kd` are **retired** (Stage 4 = self-distillation candidate *under test* vs a step-matched no-KD control — may drop to a clean 3-stage); the "soft-label split under KD" is **not** a current novel element. Authoritative: `docs/PAPER_CONTRIBUTIONS.md`, `docs/SWEEP_PLAN_2026-06-21.md`, `docs/METHODOLOGY_FINDINGS_2026-06-21.md`.
-
 # Addressing Severe Class Imbalance in Rural Image Segmentation
 
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
@@ -8,9 +6,9 @@
 ![Rasterio](https://img.shields.io/badge/Rasterio-1.4-green)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
-Code accompanying the manuscript *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer* — a staged cumulative ablation applying
-minority replication, OEM pre-training, hard×minority sampling, and knowledge
-distillation to high-resolution Pléiades satellite imagery with FT-UNetFormer.
+Code accompanying the manuscript *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer* — a cumulative
+3-stage ablation that pairs cross-dataset transfer (OpenEarthMap pre-training, taxonomy-harmonised)
+with class-balanced sampling on high-resolution Pléiades satellite imagery, using FT-UNetFormer.
 
 This repository contains the complete training pipeline, evaluation scripts,
 supplementary analyses, and figure generation used in the manuscript. A single
@@ -41,10 +39,11 @@ bash RUNBOOK.sh --from B1      # resume from training onward
 bash RUNBOOK.sh --from C1      # resume from evaluation onward
 ```
 
-Individual stages (4-stage, no-replication; teacher is built upstream — see `RUNBOOK.md`):
+Individual stages (3-stage, replication-free; teacher is built upstream to ground the
+OEM→student mapping — see `RUNBOOK.md`):
 
 ```bash
-# Teacher (built once, fixed across seeds):
+# Teacher (built once, fixed across seeds) — grounds the OEM->student taxonomy mapping:
 PYTHONPATH=. python -m train.train_teacher -c config/teacher/unet_oem.py
 PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
   --ckpt model_weights/teacher/teacher.ckpt \
@@ -52,17 +51,14 @@ PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
 PYTHONPATH=. python scripts/analysis/teacher_oem_to_gt_confusion.py   # grounds the OEM->student mappings
 
 # Student lineage:
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage1_baseline.py
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2a_oem_pretrain.py
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2b_oem_finetune.py
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage1_baseline.py     # Stage 1: baseline
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2a_oem_pretrain.py # Stage 2a: OEM pre-train
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2b_oem_finetune.py # Stage 2b: finetune on Bio
 
-# Build Stage 3 sampler weights from the Stage 2b checkpoint:
-PYTHONPATH=. python scripts/data_prep/build_sampler_weights.py \
-  --ckpt model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt \
-  --out  artifacts/sampler_weights.tsv
+# Build the class-balanced (clsbal) sampler weights (frequency-only, Kang et al. 2020):
+PYTHONPATH=. python scripts/data_prep/build_clsbal_sampler.py        # -> artifacts/sampler_weights_clsbal.tsv
 
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_sampler.py
-PYTHONPATH=. python -m train.train_kd          -c config/biodiversity/stage4_kd.py
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_clsbal.py        # Stage 3: clsbal (final model)
 ```
 
 ---
@@ -76,10 +72,10 @@ PYTHONPATH=. python evaluation/compute_metrics.py \
   --base-dir model_weights/biodiversity \
   --data-root data/biodiversity_split/val
 
-# Held-out test set (final model only):
+# Held-out test set (final model only — Stage 3 clsbal; add --tta for the reported TTA number):
 PYTHONPATH=. python evaluation/compute_metrics.py \
   --split test \
-  --base-dir model_weights/biodiversity/stage4_kd \
+  --base-dir model_weights/biodiversity/stage3_clsbal \
   --data-root data/biodiversity_split/test
 ```
 
@@ -102,7 +98,7 @@ python scripts/figures/Figure03.py          # RGB tile examples (data only)
 python scripts/figures/Figure04.py          # OpenEarthMap taxonomy-harmonisation example (data only)
 python scripts/figures/Figure09.py          # Confusion matrices (artifacts only)
 python scripts/figures/Figure10.py          # Per-class IoU (metrics only)
-python scripts/figures/Figure11.py          # KD pixel transitions
+python scripts/figures/Figure11.py          # Pixel-level transitions (baseline vs final)
 ```
 
 Figures 1 (staged-pipeline flowchart) and 2 (two-axes mitigation schematic) are TikZ,
@@ -140,7 +136,7 @@ Users with licensed access should place files as follows:
 | OEM filtered subset | `data/openearthmap_filtered/` |
 | Stage checkpoints | `model_weights/biodiversity/<stage>/` |
 | OEM teacher weights | `pretrain_weights/` |
-| Stage 3 sampler weights | `artifacts/sampler_weights.tsv` |
+| Stage 3 sampler weights (clsbal) | `artifacts/sampler_weights_clsbal.tsv` |
 | Pre-computed evaluation outputs | `evaluation/evaluation_results/` |
 
 ---
@@ -148,7 +144,7 @@ Users with licensed access should place files as follows:
 ## Manuscript reproducibility
 
 - Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce A1–A6 from saved evaluation outputs and sampling artefacts — no retraining required.
-- Data preparation scripts (split, filter, relabel, combine, replicate, build weights, export checkpoint) are in `scripts/data_prep/`.
+- Data preparation scripts (split, filter, relabel, combine, build clsbal sampler weights, export teacher checkpoint) are in `scripts/data_prep/`.
 
 ---
 
