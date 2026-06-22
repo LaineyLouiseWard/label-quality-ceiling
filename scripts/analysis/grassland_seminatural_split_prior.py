@@ -2,10 +2,14 @@
 """
 Ground the KD Rangeland-split prior (alpha) in the data.
 
-The teacher's OEM "Rangeland" soft mass is split Grassland(alpha) / Seminatural(1-alpha)
-under KD (geoseg/taxonomy.py:oem_to_student_kd, config rangeland_split_alpha=0.7). This
-script reports the empirical prior alpha = Grassland / (Grassland + Seminatural) from the
-*training* labels only, so the chosen value can be justified (not tuned on the metric).
+SUPERSEDED (2026-06-19): the campaign KD map is the full grounded confusion
+(build_mapping_from_confusion("B")), which has no Rangeland-split alpha. This script and the
+legacy name-based split (formerly geoseg/taxonomy.oem_to_student_kd, now removed) are kept only
+as the historical record of how the alpha prior was estimated. See docs/KD_MAPPING_GROUNDING.md.
+
+The teacher's OEM "Rangeland" soft mass was split Grassland(alpha) / Seminatural(1-alpha) under
+the old KD map. This script reports the empirical prior alpha = Grassland / (Grassland + Seminatural)
+from the *training* labels only, so the chosen value could be justified (not tuned on the metric).
 
 Grassland = class 2, Seminatural = class 5 (geoseg/taxonomy.STUDENT_CLASSES).
 Counts are over raw label pixels; Background (0) is reported but excluded from the ratio.

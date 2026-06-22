@@ -14,12 +14,11 @@ if ! python -c "import torch" >/dev/null 2>&1; then
 fi
 
 # ====================================================================
-# Full reproducibility pipeline — 4-stage, no-replication ablation
+# Full reproducibility pipeline — 3-stage, no-replication ablation
 #
 #   Stage 1  baseline
 #   Stage 2  OEM transfer        (2a pre-train on Bio+OEM -> 2b finetune on Bio)
-#   Stage 3  hard x minority sampler
-#   Stage 4  knowledge distillation (KD-B, grounded teacher->target mapping)
+#   Stage 3  clsbal class-balanced sampler  (FINAL shipped model)
 #
 # The teacher is built UPSTREAM of the student lineage (teacher -> confusion ->
 # grounded OEM relabel -> student), because the OEM->student mappings are derived
@@ -29,12 +28,12 @@ fi
 #   bash RUNBOOK.sh                          # run everything from A0
 #   bash RUNBOOK.sh --from B1                # resume from Stage 1 training onward
 #   bash RUNBOOK.sh --from B1 --to C2        # run a stage WINDOW (Stage 1 .. test eval)
-#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh      # ALSO run the N3/N4 attribution null controls
+#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh      # ALSO run the N3 attribution null control
 #   SEED=1 bash RUNBOOK.sh --from B1         # student lineage at seed 1 (teacher fixed at 42)
 #   RESUME=1 bash RUNBOOK.sh --from B1       # resume training stages from their last.ckpt (no --force)
 #
 # Valid stages: A0 (taxonomy check), A1-A10 (data prep + teacher build),
-#               B1-B6 (student training), N3-N4 (optional null controls),
+#               B1-B5 (student training), N3 (optional null control),
 #               C1-C4 (evaluation), D (analyses), E (figures)
 #
 # For the full 5-seed campaign as ONE resumable command, use ./run_campaign.sh.
@@ -60,7 +59,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Ordered list of all stages
-STAGES=(A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 B1 B2 B3 B4 B5 B6 N3 N4 C1 C2 C3 C4 D E)
+STAGES=(A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 B1 B2 B3 B4 B5 N3 C1 C2 C3 C4 D E)
 
 # Validate --from value
 valid=false
@@ -256,7 +255,7 @@ if run_stage A10; then
 fi
 
 # ======================== B. STUDENT LINEAGE =========================
-# Seed-varying. Honours $SEED (default 42) in train_supervision / train_kd.
+# Seed-varying. Honours $SEED (default 42) in train_supervision.
 
 if run_stage B1; then
   require_nonempty data/biodiversity_split/train/images A1
@@ -280,58 +279,34 @@ if run_stage B3; then
 fi
 
 if run_stage B4; then
-  require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
   require_nonempty data/biodiversity_split/train/images A1
-  echo "[B4] Building hard x minority sampler weights (from the Stage 2b checkpoint)"
-  PYTHONPATH=. python scripts/data_prep/build_sampler_weights.py \
-    --ckpt      model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt \
-    --out       artifacts/sampler_weights.tsv \
+  echo "[B4] Building class-balanced (clsbal) sampler weights"
+  PYTHONPATH=. python scripts/data_prep/build_clsbal_sampler.py \
     --data_root data/biodiversity_split/train \
-    --batch_size 2 --num_workers 4 \
+    --out       artifacts/sampler_weights_clsbal.tsv \
+    --q 1.0 --settlement_target 1.27 \
     --force
 fi
 
 if run_stage B5; then
   require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
-  require_file artifacts/sampler_weights.tsv B4
-  echo "[B5] Stage 3: Hard x minority sampling"
+  require_file artifacts/sampler_weights_clsbal.tsv B4
+  echo "[B5] Stage 3: Class-balanced (clsbal) sampling — FINAL shipped model"
   PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage3_sampler.py $FORCE_TRAIN
-fi
-
-if run_stage B6; then
-  require_file model_weights/biodiversity/stage3_sampler/stage3_sampler.ckpt B5
-  require_file "$TEACHER_PTH" A6
-  echo "[B6] Re-verifying teacher is native-A before KD (guards --from B6 resumes / stale .pth)"
-  # Hard gate: aborts (set -e) rather than silently distilling from a stale/6-class teacher.
-  PYTHONPATH=. python scripts/verify_teacher_channels.py \
-    --ckpt "$TEACHER_PTH" \
-    --data-root data/openearthmap_teacher/val
-  echo "[B6] Stage 4: Knowledge distillation (KD-B, grounded mapping)"
-  PYTHONPATH=. python -m train.train_kd \
-    -c config/biodiversity/stage4_kd.py $FORCE_TRAIN
+    -c config/biodiversity/stage3_clsbal.py $FORCE_TRAIN
 fi
 
 # ============= N. NULL CONTROLS (optional; export RUN_NULL_CONTROLS=1) ===============
-# Off by default. Two attribution controls, each differing from its parent stage in EXACTLY one
+# Off by default. Attribution control differing from its parent stage in EXACTLY one
 # component, isolating the named mechanism from the +45-epoch / draw-count effect:
 #   N3 = Stage 2b continued WITH uniform draws (no weighting)  ->  Stage3 - N3 = the sampler's effect
-#   N4 = Stage 3 continued WITHOUT KD                          ->  Stage4 - N4 = KD's effect
-# (N4 is the MANDATORY per-seed control in the 5-seed campaign.) Both run the same 45 epochs and
-# 2646 draws/epoch as their parent, and are evaluated automatically by C1.
+# Runs the same 45 epochs and 2646 draws/epoch as its parent, and is evaluated automatically by C1.
 
 if run_stage N3 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
   require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
   echo "[N3] Null control: Stage 2b continued WITHOUT the hard x minority weighting (uniform draws)"
   PYTHONPATH=. python -m train.train_supervision \
     -c config/biodiversity/stage3null_nosampler.py $FORCE_TRAIN
-fi
-
-if run_stage N4 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
-  require_file model_weights/biodiversity/stage3_sampler/stage3_sampler.ckpt B5
-  echo "[N4] Null control: Stage 3 continued WITHOUT knowledge distillation"
-  PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage4null_nokd.py $FORCE_TRAIN
 fi
 
 # ======================== C. EVALUATION ==============================
@@ -350,10 +325,10 @@ fi
 
 if run_stage C2; then
   require_file model_weights/biodiversity/stage1_baseline/stage1_baseline.ckpt B1
-  require_file model_weights/biodiversity/stage4_kd/stage4_kd.ckpt B6
+  require_file model_weights/biodiversity/stage3_clsbal/stage3_clsbal.ckpt B5
   require_nonempty data/biodiversity_split/test/images A1
-  echo "[C2] Evaluating held-out test set (Stage 1 baseline + Stage 4 final; intermediate stages not on test)"
-  # Baseline AND final on the test split — C4 (export_final_test_table) needs both metrics.json files.
+  echo "[C2] Evaluating held-out test set (Stage 1 baseline + Stage 3 final; intermediate stages not on test)"
+  # Baseline AND final on the test split, WITHOUT TTA — C4 (export_final_test_table) needs both metrics.json files.
   PYTHONPATH=. python evaluation/compute_metrics.py \
     --split test \
     --base-dir model_weights/biodiversity/stage1_baseline \
@@ -362,9 +337,22 @@ if run_stage C2; then
     --force
   PYTHONPATH=. python evaluation/compute_metrics.py \
     --split test \
-    --base-dir model_weights/biodiversity/stage4_kd \
+    --base-dir model_weights/biodiversity/stage3_clsbal \
     --data-root data/biodiversity_split/test \
     --out-dir evaluation/evaluation_results/test \
+    --force
+  # Final shipped model (Stage 3 clsbal): ALSO evaluate the test split WITH TTA so the paper
+  # can report both. TTA = multi-scale + H+V flip, softmax-averaged (GeoSeg 'd4' minus 1.5 scale;
+  # bilinear interp here vs GeoSeg bicubic — harmless, worth a one-line methods note). Written to
+  # a SEPARATE out-dir so the no-TTA metrics.json above (the one C4 reads) is preserved alongside it.
+  # NB: the val/ablation eval (C1) deliberately stays WITHOUT TTA — TTA lifts all stages ~equally
+  # and must not be silently turned on there.
+  PYTHONPATH=. python evaluation/compute_metrics.py \
+    --split test \
+    --base-dir model_weights/biodiversity/stage3_clsbal \
+    --data-root data/biodiversity_split/test \
+    --out-dir evaluation/evaluation_results/test_tta \
+    --tta --tta-flips hv --tta-scales 0.75,1.0,1.25 \
     --force
 fi
 
@@ -386,7 +374,7 @@ fi
 
 if run_stage D; then
   require_nonempty evaluation/evaluation_results/val C1
-  require_nonempty model_weights/biodiversity B6   # fail fast before running a1-a6
+  require_nonempty model_weights/biodiversity B5   # fail fast before running a1-a6
   echo "[D] Running supplementary analyses (A1-A6)"
   PYTHONPATH=. python scripts/analysis/a1_minority_recall.py
   PYTHONPATH=. python scripts/analysis/a2_symmetric_confusion.py

@@ -68,6 +68,11 @@ def parse_args():
     p.add_argument("--clip_lo", type=float, default=5.0)
     p.add_argument("--clip_hi", type=float, default=95.0)
     p.add_argument("--eps", type=float, default=1e-6)
+    p.add_argument("--per_class", action="store_true",
+                   help="Lever 2: write PER-CLASS raw tile weights w4 (Settlement) and w5 (Seminatural) "
+                        "as separate columns instead of the pooled single weight. The config combines, "
+                        "clips and uniform-mixes them ONCE at load time (so the Settlement boost s4 is a "
+                        "tunable config knob without rebuilding the TSV). Header: img_id\\tw4\\tw5.")
     p.add_argument("--force", action="store_true",
                    help="Overwrite existing output without prompting.")
     return p.parse_args()
@@ -80,7 +85,15 @@ def load_student(net, ckpt_path):
         for k, v in ckpt["state_dict"].items()
         if k.startswith("net.")
     }
-    net.load_state_dict(sd, strict=False)
+    missing, unexpected = net.load_state_dict(sd, strict=False)
+    # Gate G8: load_state_dict is strict=False, so a wrong/partial ckpt loads SILENTLY and hardness
+    # would be computed from garbage predictions. Assert the right teacher loaded cleanly.
+    base = os.path.basename(ckpt_path)
+    print(f"[G8] ckpt basename={base}  missing={len(missing)}  unexpected={len(unexpected)}")
+    assert base == "stage2b_oem_finetune.ckpt", (
+        f"[G8] sampler hardness must be built from the Stage 2b teacher, got '{base}'"
+    )
+    assert len(missing) == 0, f"[G8] {len(missing)} missing keys on student load — wrong/partial ckpt"
     print("[OK] Loaded Stage 2b student weights.")
 
 
@@ -116,6 +129,9 @@ def main():
     hardness_cnt: dict[str, int] = {}
     richness_sum: dict[str, float] = {}
     richness_cnt: dict[str, int] = {}
+    # Per-class (Lever 2): track Settlement(4) and Seminatural(5) richness independently.
+    rich4_sum: dict[str, float] = {}
+    rich5_sum: dict[str, float] = {}
 
     for batch in dl:
         img = batch["img"].to(device)
@@ -125,6 +141,8 @@ def main():
         pred = torch.argmax(net(img), dim=1)
         err = (pred != gt).float().mean(dim=(1, 2))
         rich = ((gt == 4) | (gt == 5)).float().mean(dim=(1, 2))
+        rich4 = (gt == 4).float().mean(dim=(1, 2))
+        rich5 = (gt == 5).float().mean(dim=(1, 2))
 
         for i, img_id in enumerate(ids):
             key = _norm_id(img_id)
@@ -132,9 +150,29 @@ def main():
             hardness_cnt[key] = hardness_cnt.get(key, 0) + 1
             richness_sum[key] = richness_sum.get(key, 0.0) + rich[i].item()
             richness_cnt[key] = richness_cnt.get(key, 0) + 1
+            rich4_sum[key] = rich4_sum.get(key, 0.0) + rich4[i].item()
+            rich5_sum[key] = rich5_sum.get(key, 0.0) + rich5[i].item()
 
     keys = sorted(hardness_sum.keys())
     h = np.array([hardness_sum[k] / hardness_cnt[k] for k in keys])
+
+    if args.per_class:
+        r4 = np.array([rich4_sum[k] / richness_cnt[k] for k in keys])
+        r5 = np.array([rich5_sum[k] / richness_cnt[k] for k in keys])
+        hf = (h + args.eps) ** args.beta_temper
+        w4 = hf * (r4 + args.eps) ** args.gamma_rich
+        w5 = hf * (r5 + args.eps) ** args.gamma_rich
+        # Write RAW per-class weights; combine+clip+mix happens ONCE in the arm config (step 2).
+        with open(args.out, "w") as f:
+            f.write("img_id\tw4\tw5\n")
+            for k, a, b in zip(keys, w4, w5):
+                f.write(f"{k}\t{a:.8f}\t{b:.8f}\n")
+        n4 = int((r4 > 0).sum())
+        n5 = int((r5 > 0).sum())
+        print(f"[OK] Wrote {len(keys)} PER-CLASS weights -> {args.out}  "
+              f"(Settlement-bearing={n4}, Seminat-bearing={n5}; beta={args.beta_temper})")
+        return
+
     r = np.array([richness_sum[k] / richness_cnt[k] for k in keys])
 
     w_raw = (h + args.eps) ** args.beta_temper * (r + args.eps) ** args.gamma_rich

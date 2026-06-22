@@ -80,9 +80,16 @@ def main() -> None:
     skip = set(args.skip)
 
     # Canonical manuscript figures (ordered)
+    # "mapping" = the grounded OEM<->Bio mapping schematic (Figure_mapping.tex -> final Fig 5).
+    # Its numeric content is generated reproducibly by _gen_mapping_values.py from the frozen
+    # teacher confusion; no campaign dependency, so it builds with the rest of the TikZ set.
+    # NOTE: the graphical abstract (graphical_abstract_tikz.tex) is intentionally NOT wired here
+    # yet — it needs the median-seed prediction PNGs (biodiversity_1310_stage{1,3,4}*.png) which
+    # do not exist until the seed campaign finishes; wiring it now would make this build fail.
     figures: list[tuple[str, callable]] = [
         ("01", lambda: run_tex(SCRIPTS_DIR / "Figure01.tex")),
         ("02", lambda: run_tex(SCRIPTS_DIR / "Figure02.tex")),
+        ("mapping", lambda: run_tex(SCRIPTS_DIR / "Figure_mapping.tex")),
         ("03", lambda: run_py_no_device(SCRIPTS_DIR / "Figure03.py")),
         ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
         ("05", lambda: run_py_no_device(SCRIPTS_DIR / "Figure05.py")),

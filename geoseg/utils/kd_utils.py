@@ -5,8 +5,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-# Class orders and the KD mapping all derive from the canonical source: geoseg/taxonomy.py.
-from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES, oem_to_student_kd
+# Class orders all derive from the canonical source: geoseg/taxonomy.py. The KD mapping is
+# grounded in the teacher's empirical confusion (build_mapping_from_confusion below), NOT a
+# name-based hand-map.
+from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES
 
 # Native OpenEarthMap channel order (teacher output channel i == OEM class i). The KD targets
 # (built below) follow Table 1's distillation column — rangeland and bareland carry semi-natural
@@ -20,77 +22,43 @@ NEW_CLASSES = list(STUDENT_CLASSES)
 # Tuple form for equality comparison against biodiversity_dataset.CLASSES.
 REMAP_OUTPUT_CLASSES = tuple(NEW_CLASSES)
 
-def create_mapping_matrix(alpha=0.7, class_weights=None):
-    """Create 9x6 mapping matrix M that maps OEM classes to new taxonomy.
-    
-    Args:
-        alpha: float, portion of Rangeland that goes to Grassland (1-alpha goes to SemiNatural)
-        class_weights: Optional list/tensor of weights for target classes to boost minority classes
-        
-    Returns:
-        torch.Tensor of shape (9, 6) with each row summing to 1.0
-    """
-    # Build from the canonical KD map (geoseg/taxonomy.oem_to_student_kd): rows = native OEM
-    # class (0..8), columns = student NEW_CLASSES order
-    # (Background=0, Forest=1, Grassland=2, Cropland=3, Settlement=4, Seminatural=5). Rows sum to 1.0.
-    M = torch.zeros(len(OEM_CLASSES), len(NEW_CLASSES))
-    for oem_idx, targets in oem_to_student_kd(alpha).items():
-        for student_idx, weight in targets:
-            M[oem_idx, student_idx] = weight
-
-    # Apply class weights to boost minority classes
-    if class_weights is not None:
-        if isinstance(class_weights, (list, tuple)):
-            class_weights = torch.FloatTensor(class_weights)
-        # Multiply each column by its weight
-        M = M * class_weights.unsqueeze(0)
-        # Re-normalize rows to sum to 1
-        row_sums = M.sum(dim=1, keepdim=True)
-        M = M / (row_sums + 1e-8)
-    
-    return M
-
-
-def build_mapping_from_confusion(mode, conf_path="artifacts/teacher_oem_gt_confusion.npz", alpha=0.73):
-    """Build a 9x6 KD mapping matrix GROUNDED in the teacher's training-set confusion.
+def build_mapping_from_confusion(mode="B", conf_path="artifacts/teacher_oem_gt_confusion.npz"):
+    """Build the 9x6 KD mapping matrix GROUNDED in the teacher's training-set confusion.
 
     Reads the soft (prob-weighted) confusion saved by
     scripts/analysis/teacher_oem_to_gt_confusion.py and row-normalises it to
     P(GT student | teacher OEM) -- a soft label-transition matrix (cf. Patrini 2017
-    forward-correction). See docs/KD_MAPPING_GROUNDING.md.
+    forward-correction). See docs/KD_MAPPING_GROUNDING.md. This is the campaign KD map.
 
-    mode 'A' (targeted): keep the semantic map create_mapping_matrix(alpha) and replace ONLY the
-        three demonstrably-mismatched rows -- Bareland(1), Water(6), Agriculture(7) -- with the
-        measured distribution. Clean/grounded rows stay confident (no teacher-noise injection).
-    mode 'B' (full data-driven): every OEM row = the measured distribution.
+    Only mode 'B' (full data-driven: every OEM row = the measured distribution) is supported.
+    The legacy name-based map and the partial mode 'A' were removed 2026-06-19; the A-vs-B
+    decision is documented in docs/KD_MAPPING_GROUNDING.md.
     """
+    if mode != "B":
+        raise ValueError(f"only mode 'B' (grounded) is supported, got {mode!r}")
     data = np.load(conf_path, allow_pickle=True)
     soft = data["soft"].astype(np.float64)                       # (9, 6)
     rownorm = soft / soft.sum(axis=1, keepdims=True).clip(min=1e-12)
-    rownorm = torch.tensor(rownorm, dtype=torch.float32)
-    if mode == "B":
-        return rownorm
-    if mode == "A":
-        M = create_mapping_matrix(alpha)
-        for oem_idx in (1, 6, 7):  # Bareland, Water, Agriculture
-            M[oem_idx] = rownorm[oem_idx]
-        return M
-    raise ValueError(f"mode must be 'A' or 'B', got {mode!r}")
+    return torch.tensor(rownorm, dtype=torch.float32)
 
 
 class KDHelper:
     """Knowledge Distillation helper for computing teacher probabilities and KD loss."""
     
-    def __init__(self, mapping_matrix=None, alpha=0.7, temperature=1.0):
+    def __init__(self, mapping_matrix, temperature=1.0):
         """Initialize KD helper.
-        
+
         Args:
-            mapping_matrix: torch.Tensor of shape (8, 6), maps old classes to new.
-                If None, will create using create_mapping_matrix.
-            alpha: float, portion of Rangeland that goes to Grassland if creating mapping.
+            mapping_matrix: torch.Tensor of shape (9, 6), maps OEM classes to student classes.
+                Required — pass the grounded map from build_mapping_from_confusion("B").
             temperature: float, temperature for KD loss computation.
         """
-        self.mapping_matrix = mapping_matrix if mapping_matrix is not None else create_mapping_matrix(alpha)
+        if mapping_matrix is None:
+            raise ValueError(
+                "KDHelper requires an explicit mapping_matrix; pass "
+                'build_mapping_from_confusion("B") (the grounded KD map).'
+            )
+        self.mapping_matrix = mapping_matrix
         self.temperature = temperature
         self.cache = {}  # Optional cache for teacher predictions
     

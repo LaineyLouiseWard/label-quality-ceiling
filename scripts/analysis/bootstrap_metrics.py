@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tile-level bootstrap confidence intervals for all ablation stages (1, 2, 3, 4).
+Tile-level bootstrap confidence intervals for all ablation stages (1, 2, 3).
 
 Runs inference on val and test splits, collects per-tile confusion matrices,
 then bootstraps (tile-level resampling) to produce 95% CIs for mIoU, mF1, OA.
@@ -51,8 +51,7 @@ CLASS_NAMES_5 = ["Forest", "Grassland", "Cropland", "Settlement", "Seminatural"]
 STAGES = {
     "stage1_baseline": REPO / "model_weights" / "biodiversity" / "stage1_baseline" / "stage1_baseline.ckpt",
     "stage2b_oem_finetune": REPO / "model_weights" / "biodiversity" / "stage2b_oem_finetune" / "stage2b_oem_finetune.ckpt",
-    "stage3_sampler": REPO / "model_weights" / "biodiversity" / "stage3_sampler" / "stage3_sampler.ckpt",
-    "stage4_kd": REPO / "model_weights" / "biodiversity" / "stage4_kd" / "stage4_kd.ckpt",
+    "stage3_clsbal": REPO / "model_weights" / "biodiversity" / "stage3_clsbal" / "stage3_clsbal.ckpt",
 }
 
 
@@ -185,7 +184,7 @@ def load_cms(path: Path) -> list[np.ndarray]:
 # ── main ───────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Bootstrap CIs for all ablation stages (1, 2, 3, 4)")
+    parser = argparse.ArgumentParser(description="Bootstrap CIs for all ablation stages (1, 2, 3)")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--n-boot", type=int, default=2000)
     parser.add_argument("--force", action="store_true", help="Re-run inference even if cache exists")
@@ -243,23 +242,23 @@ def main():
             lines.append(f"| {c} | {iou_val:.1%} | [{lo:.1%}, {hi:.1%}] |")
         lines.append("")
 
-    # ── Stage 1→4 delta CI ──────────────────────────────────────────────────
+    # ── Stage 1→3 delta CI ──────────────────────────────────────────────────
     for split in ("val", "test"):
         s1 = all_results.get(f"stage1_baseline/{split}")
-        s5 = all_results.get(f"stage4_kd/{split}")
-        if s1 and s5:
-            lines.append(f"## Stage 1→4 improvement ({split})")
+        s3 = all_results.get(f"stage3_clsbal/{split}")
+        if s1 and s3:
+            lines.append(f"## Stage 1→3 improvement ({split})")
             for metric in ("mIoU", "mF1", "OA"):
-                delta = s5["point"][metric] - s1["point"][metric]
+                delta = s3["point"][metric] - s1["point"][metric]
                 # Delta of values rounded to 1 dp -- the convention used in the manuscript
                 # tables, where per-class/mean deltas are differences of the displayed rounded
                 # cells. This can differ from the raw delta by up to ~0.1 pp due to endpoint
                 # rounding (e.g. test mIoU: raw +10.5 vs rounded-endpoint +10.6).
-                delta_rounded = round(s5["point"][metric] * 100, 1) - round(s1["point"][metric] * 100, 1)
+                delta_rounded = round(s3["point"][metric] * 100, 1) - round(s1["point"][metric] * 100, 1)
                 # Width of individual CIs as proxy for uncertainty
                 w1 = s1["ci_95"][metric][1] - s1["ci_95"][metric][0]
-                w5 = s5["ci_95"][metric][1] - s5["ci_95"][metric][0]
-                lines.append(f"- **Δ{metric}**: +{delta:.1%} raw (+{delta_rounded:.1f} pp from rounded endpoints, as reported in the manuscript)  (individual CI widths: ±{w1/2:.1%}, ±{w5/2:.1%})")
+                w3 = s3["ci_95"][metric][1] - s3["ci_95"][metric][0]
+                lines.append(f"- **Δ{metric}**: +{delta:.1%} raw (+{delta_rounded:.1f} pp from rounded endpoints, as reported in the manuscript)  (individual CI widths: ±{w1/2:.1%}, ±{w3/2:.1%})")
             lines.append("")
 
     md_path.write_text("\n".join(lines))

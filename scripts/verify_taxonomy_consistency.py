@@ -56,32 +56,20 @@ check(dict(tax.OEM_TO_STUDENT_PRETRAIN) == {0: 0, 1: 5, 2: 2, 3: 4, 4: 4, 5: 1, 
 check(tuple(tax.MINORITY_INDICES) == (4, 5) and tax.BACKGROUND_INDEX == 0,
       "MINORITY_INDICES / BACKGROUND_INDEX changed")
 
-# KD soft map (alpha=0.7) must equal the verified native-A targets
-EXPECTED_KD = {0: {0: 1.0}, 1: {5: 1.0}, 2: {2: 0.7, 5: 0.3}, 3: {4: 1.0}, 4: {4: 1.0},
-               5: {1: 1.0}, 6: {0: 1.0}, 7: {3: 1.0}, 8: {4: 1.0}}
-kd = {o: {s: round(w, 6) for s, w in targets} for o, targets in tax.oem_to_student_kd(0.7).items()}
-check(kd == EXPECTED_KD, f"oem_to_student_kd(0.7) changed from verified KD map: {kd}")
+# (The legacy name-based KD soft map oem_to_student_kd / create_mapping_matrix was removed
+# 2026-06-19. The KD map is now the grounded build_mapping_from_confusion("B"), checked below.)
 
 # ---------------------------------------------------------------------------
-# 2. DERIVATION — load-bearing modules derive from taxonomy; KD matrix matches native-A
+# 2. DERIVATION — load-bearing modules derive from taxonomy
 # ---------------------------------------------------------------------------
 from geoseg.datasets.biodiversity_dataset import CLASSES as BIO_CLASSES, PALETTE as BIO_PALETTE
 check(tuple(BIO_CLASSES) == tuple(tax.STUDENT_CLASSES), "biodiversity_dataset.CLASSES != taxonomy")
 check(list(map(list, BIO_PALETTE)) == list(map(list, tax.STUDENT_PALETTE)), "biodiversity_dataset.PALETTE != taxonomy")
 
-from geoseg.utils.kd_utils import OEM_CLASSES, NEW_CLASSES, REMAP_OUTPUT_CLASSES, create_mapping_matrix
+from geoseg.utils.kd_utils import OEM_CLASSES, NEW_CLASSES, REMAP_OUTPUT_CLASSES
 check(tuple(OEM_CLASSES) == tuple(tax.OEM_NATIVE_CLASSES), "kd_utils.OEM_CLASSES != taxonomy")
 check(tuple(NEW_CLASSES) == tuple(tax.STUDENT_CLASSES), "kd_utils.NEW_CLASSES != taxonomy")
 check(tuple(REMAP_OUTPUT_CLASSES) == tuple(tax.STUDENT_CLASSES), "kd_utils.REMAP_OUTPUT_CLASSES != student CLASSES")
-
-M = create_mapping_matrix(0.7)
-check(tuple(M.shape) == (9, 6), f"KD matrix shape {tuple(M.shape)} != (9,6)")
-row_sums = [round(float(M[i].sum()), 6) for i in range(M.shape[0])]
-check(all(rs == 1.0 for rs in row_sums), f"KD matrix rows do not sum to 1: {row_sums}")
-nonzero = {(i, j): round(float(M[i, j]), 6) for i in range(9) for j in range(6) if float(M[i, j]) != 0.0}
-EXPECTED_M = {(0, 0): 1.0, (1, 5): 1.0, (2, 2): 0.7, (2, 5): 0.3, (3, 4): 1.0,
-              (4, 4): 1.0, (5, 1): 1.0, (6, 0): 1.0, (7, 3): 1.0, (8, 4): 1.0}
-check(nonzero == EXPECTED_M, f"KD matrix entries changed from verified native-A: {nonzero}")
 
 from scripts.data_prep.relabel_oem_taxonomy import OEM_ID_TO_TARGET6
 check(dict(OEM_ID_TO_TARGET6) == dict(tax.OEM_TO_STUDENT_PRETRAIN), "relabel OEM_ID_TO_TARGET6 != taxonomy")

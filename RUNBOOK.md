@@ -1,20 +1,24 @@
+> **Current state 2026-06-22 — clean 3-stage pipeline.** Stage-3 sampler = **clsbal** (A0 `stage3_sampler`/`sampler_weights.tsv` retired); **Stage 3 (clsbal) is the final shipped model.** Stage-4 knowledge distillation (and self-distillation) was **dropped** — its code is archived under `_archive/kd_selfdistil/`; the "soft-label split under KD" is **not** a current novel element. Authoritative: `docs/PAPER_CONTRIBUTIONS.md`, `docs/SELFDISTIL_VERDICT_2026-06-22.md`, `docs/METHODOLOGY_FINDINGS_2026-06-21.md`.
+
 # Reproducibility Runbook
 
 From-scratch instructions for reproducing all results in the manuscript
 *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer*.
 
-The ablation is **4-stage and replication-free**:
+The ablation is **3-stage and replication-free**:
 
 | Stage | Mechanism added | Config |
 |-------|-----------------|--------|
 | 1 | Baseline (supervised) | `stage1_baseline.py` |
 | 2 | OEM transfer (2a pre-train on Bio+OEM → 2b finetune on Bio) | `stage2a_oem_pretrain.py`, `stage2b_oem_finetune.py` |
-| 3 | Hard × minority sampler | `stage3_sampler.py` |
-| 4 | Knowledge distillation (KD-B, grounded mapping) | `stage4_kd.py` |
+| 3 | Class-balanced sampler (clsbal, Kang 2020) — **final shipped model** | `stage3_clsbal.py` |
 
-The **teacher is built upstream** of the student lineage, because the OEM→student mappings are
-*derived from the teacher's measured confusion* (teacher → confusion → grounded relabel → student).
-See `docs/KD_MAPPING_GROUNDING.md`.
+Stage 3 (clsbal) is the terminal, deployed model. Stage-4 knowledge distillation was **dropped**
+(its code is archived under `_archive/kd_selfdistil/`); see `docs/SELFDISTIL_VERDICT_2026-06-22.md`.
+
+The OEM teacher is still **built upstream** of the student lineage, because the OEM→student relabel
+mappings are *derived from the teacher's measured confusion* (teacher → confusion → grounded relabel
+→ student). See `docs/KD_MAPPING_GROUNDING.md`.
 
 All commands assume you are in the repository root with the `ClassImbalance` conda environment active.
 
@@ -51,8 +55,8 @@ Run the student lineage at a different seed (the teacher stays fixed at seed 42)
 SEED=1 bash RUNBOOK.sh --from B1
 ```
 
-Valid stages: `A0` (taxonomy check), `A1`–`A10` (data prep + teacher build), `B1`–`B6` (student
-training), `N3`–`N4` (optional null controls), `C1`–`C4` (evaluation), `D` (analyses), `E` (figures).
+Valid stages: `A0` (taxonomy check), `A1`–`A10` (data prep + teacher build), `B1`–`B5` (student
+training), `N3` (optional null control), `C1`–`C4` (evaluation), `D` (analyses), `E` (figures).
 
 **Warning:** This overwrites all derived outputs in-place — checkpoints, sampler weights, evaluation
 results, and figures. Raw data (`data/biodiversity_raw/`, `data/openearthmap_raw/`) is never modified.
@@ -158,7 +162,7 @@ PYTHONPATH=. python scripts/data_prep/create_biodiversity_oem_combined.py \
 
 ---
 
-## B. Student lineage (B1–B6)
+## B. Student lineage (B1–B5)
 
 Seed-varying; honours `$SEED` (default 42). Each stage warm-starts from the previous checkpoint.
 
@@ -180,32 +184,22 @@ PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage2b_oe
 ```
 **Data:** `data/biodiversity_split/train/` · **Requires:** Stage 2a ckpt · **Output:** `model_weights/biodiversity/stage2b_oem_finetune/`
 
-### B4. Build hard × minority sampler weights (offline)
+### B4. Build class-balanced sampler weights (offline)
 ```bash
-PYTHONPATH=. python scripts/data_prep/build_sampler_weights.py \
-  --ckpt      model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt \
-  --out       artifacts/sampler_weights.tsv \
-  --data_root data/biodiversity_split/train --batch_size 2 --num_workers 4 --force
+PYTHONPATH=. python scripts/data_prep/build_clsbal_sampler.py
 ```
-**Requires:** Stage 2b ckpt · **Output:** `artifacts/sampler_weights.tsv` (base-keyed, 1,846 tiles)
+Frequency-only (Kang 2020): no checkpoint needed. Defaults are q=1.0 and settlement_target=1.27.
+**Output:** `artifacts/sampler_weights_clsbal.tsv`
 
-### B5. Stage 3 — Hard × minority sampling
+### B5. Stage 3 — Class-balanced sampling (final shipped model)
 ```bash
-PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_sampler.py --force
+PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_clsbal.py --force
 ```
-**Data:** `data/biodiversity_split/train/` · **Requires:** Stage 2b ckpt, `sampler_weights.tsv`
-**Output:** `model_weights/biodiversity/stage3_sampler/`
+**Data:** `data/biodiversity_split/train/` · **Requires:** Stage 2b ckpt (warm start), `sampler_weights_clsbal.tsv`
+**Output:** `model_weights/biodiversity/stage3_clsbal/` (deployed final model)
 
-### B6. Stage 4 — Knowledge distillation (KD-B)
-```bash
-PYTHONPATH=. python -m train.train_kd -c config/biodiversity/stage4_kd.py --force
-```
-**Data:** `data/biodiversity_split/train/` · **Requires:** Stage 3 ckpt, exported teacher weights (A6)
-**Output:** `model_weights/biodiversity/stage4_kd/` (deployed final model, paper "Stage 4")
-
-### N3 / N4 — Attribution null controls (optional)
+### N3 — Attribution null control (optional)
 `RUN_NULL_CONTROLS=1`. N3 = Stage 2b + uniform draws (no weighting) → `Stage3 − N3` = sampler effect.
-N4 = Stage 3 without KD → `Stage4 − N4` = KD effect (mandatory per-seed control in the campaign).
 
 ---
 
@@ -219,16 +213,20 @@ PYTHONPATH=. python evaluation/compute_metrics.py --split val \
 ```
 **Output:** `evaluation/evaluation_results/val/<stage>/` (metrics.json, confusion matrices, reports).
 
-### C2. Held-out test set (baseline + final model)
+### C2. Held-out test set (baseline + final model; final model also WITH TTA)
 ```bash
 PYTHONPATH=. python evaluation/compute_metrics.py --split test \
   --base-dir model_weights/biodiversity/stage1_baseline --data-root data/biodiversity_split/test \
   --out-dir evaluation/evaluation_results/test --force
 PYTHONPATH=. python evaluation/compute_metrics.py --split test \
-  --base-dir model_weights/biodiversity/stage4_kd --data-root data/biodiversity_split/test \
+  --base-dir model_weights/biodiversity/stage3_clsbal --data-root data/biodiversity_split/test \
   --out-dir evaluation/evaluation_results/test --force
+# final model WITH test-time augmentation (flips + multi-scale), reported alongside the no-TTA number
+PYTHONPATH=. python evaluation/compute_metrics.py --split test \
+  --base-dir model_weights/biodiversity/stage3_clsbal --data-root data/biodiversity_split/test \
+  --out-dir evaluation/evaluation_results/test_tta --tta --tta-flips hv --tta-scales 0.75,1.0,1.25 --force
 ```
-**Output:** `evaluation/evaluation_results/test/{stage1_baseline,stage4_kd}/`
+**Output:** `evaluation/evaluation_results/test/{stage1_baseline,stage3_clsbal}/` and `evaluation/evaluation_results/test_tta/stage3_clsbal/` (TTA). The val/ablation eval (C1) stays no-TTA.
 
 ### C3. Validation summary
 ```bash
@@ -241,14 +239,14 @@ PYTHONPATH=. python evaluation/aggregate_metrics.py \
 ```bash
 python evaluation/export_final_test_table.py
 ```
-**Input:** `evaluation/evaluation_results/test/{stage1_baseline,stage4_kd}/metrics.json`
+**Input:** `evaluation/evaluation_results/test/{stage1_baseline,stage3_clsbal}/metrics.json`
 **Output:** `evaluation/evaluation_results/final_test_table.tex`
 
 ---
 
 ## D. Supplementary analyses (A1–A6)
 
-All analyses are derived from saved evaluation outputs and `artifacts/sampler_weights.tsv`. No retraining.
+All analyses are derived from saved evaluation outputs and `artifacts/sampler_weights_clsbal.tsv`. No retraining.
 
 ```bash
 PYTHONPATH=. python scripts/analysis/a1_minority_recall.py
@@ -267,13 +265,20 @@ plus cached per-tile confusion matrices in `analysis/per_tile_cms/`.
 **Inputs:**
 - `evaluation/evaluation_results/val/stage*/confusion_matrix.csv` (A1, A2, A5)
 - `evaluation/evaluation_results/val/stage*/metrics.json` (A4, A5)
-- `evaluation/evaluation_results/test/stage4_kd/metrics.json` (A4)
-- `artifacts/sampler_weights.tsv` (A3, A6)
+- `evaluation/evaluation_results/test/stage3_clsbal/metrics.json` (A4)
+- `artifacts/sampler_weights_clsbal.tsv` (A3, A6)
 - `artifacts/train_augmentation_list.json` (A3)
 
 ---
 
 ## E. Paper figures
+
+**System prerequisite — LaTeX toolchain (all figures use it).** Every figure renders in Latin Modern (the vector
+Computer Modern / LaTeX font): the TikZ figures (1, 2, the mapping schematic, the graphical abstract) compile with
+`pdflatex`, and the Python figures (3–11) use matplotlib `text.usetex=True`. Install (Debian/Ubuntu):
+`texlive-latex-base texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra cm-super lmodern dvipng`
+(`lmodern` gives Type-1 vector fonts; `cm-super`+`dvipng` are required by matplotlib's usetex). Verify:
+`pdffonts figures/Figure05.pdf` should list only `LMRoman`/`LMMath…`, all Type 1.
 
 ```bash
 python scripts/figures/build_all_figures.py --device cuda
@@ -286,12 +291,12 @@ python scripts/figures/build_all_figures.py --device cuda
 | 3 | `python scripts/figures/Figure03.py` | `data/biodiversity_raw/` |
 | 4 | `python scripts/figures/Figure04.py` (OpenEarthMap taxonomy-harmonisation example) | `data/openearthmap_raw/`, `data/openearthmap_relabelled/` |
 | 5 | `python scripts/figures/Figure05.py` (dataset class-distribution comparison) | `data/biodiversity_raw/masks/`, `data/openearthmap_filtered/masks/` |
-| 6 | `python scripts/figures/Figure06.py` (hard × minority sampling-weight distribution) | `artifacts/sampler_weights.tsv` |
-| 7 | `python scripts/figures/Figure07.py` (low/high-weight example tiles) | `artifacts/sampler_weights.tsv`, Stage 2b ckpt |
-| 8 | `python scripts/figures/Figure08.py` (4-stage qualitative comparison) | All stage checkpoints, `data/biodiversity_split/val/` |
+| 6 | `python scripts/figures/Figure06.py` (class-balanced (clsbal) sampling-weight distribution) | `artifacts/sampler_weights_clsbal.tsv` |
+| 7 | `python scripts/figures/Figure07.py` (low/high-weight example tiles) | `artifacts/sampler_weights_clsbal.tsv`, Stage 2b ckpt |
+| 8 | `python scripts/figures/Figure08.py` (3-stage qualitative comparison) | All stage checkpoints, `data/biodiversity_split/val/` |
 | 9 | `python scripts/figures/Figure09.py` | `evaluation/evaluation_results/val/` (confusion matrices) |
 | 10 | `python scripts/figures/Figure10.py` | `evaluation/evaluation_results/val/` (metrics.json) |
-| 11 | `python scripts/figures/Figure11.py` | Stage 1 + Stage 4 checkpoints, `data/biodiversity_split/val/` |
+| 11 | `python scripts/figures/Figure11.py` | Stage 1 + Stage 3 (clsbal) checkpoints, `data/biodiversity_split/val/` |
 
 (For Figures 1–2, `build_all_figures.py` compiles the `.tex` and copies the PDF into `figures/`.)
 All outputs go to `figures/`. See `docs/FIGURE_MAP.md` for full per-figure dependency lists.
@@ -314,9 +319,8 @@ Raw data (Biodiversity + OEM)
  |
  +-- B1:     Stage 1 baseline
  +-- B2-B3:  Stage 2 OEM transfer (2a pre-train -> 2b finetune)
- +-- B4:     build sampler weights         -->  artifacts/sampler_weights.tsv
+ +-- B4:     build sampler weights         -->  artifacts/sampler_weights_clsbal.tsv
  +-- B5:     Stage 3 sampler
- +-- B6:     Stage 4 KD-B (uses teacher .pth + grounded mapping)
  |
  +-- C1-C2:  evaluation                    -->  evaluation/evaluation_results/
  +-- D:      supplementary analyses (from saved eval outputs)

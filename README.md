@@ -1,3 +1,5 @@
+> **⚠ STALE — superseded; current state 2026-06-21.** This doc may describe a RETIRED pipeline. CURRENT: Stage-3 sampler = **clsbal** (A0 `stage3_sampler`/`sampler_weights.tsv` retired); the OEM-KD teacher and `stage4_kd` are **retired** (Stage 4 = self-distillation candidate *under test* vs a step-matched no-KD control — may drop to a clean 3-stage); the "soft-label split under KD" is **not** a current novel element. Authoritative: `docs/PAPER_CONTRIBUTIONS.md`, `docs/SWEEP_PLAN_2026-06-21.md`, `docs/METHODOLOGY_FINDINGS_2026-06-21.md`.
+
 # Addressing Severe Class Imbalance in Rural Image Segmentation
 
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)

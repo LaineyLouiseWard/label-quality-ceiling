@@ -11,6 +11,7 @@ from .joint_loss import *
 from .lovasz import *
 from .soft_bce import *
 from .soft_ce import *
+from .recall_ce import *
 from .soft_f1 import *
 from .wing_loss import *
 from .useful_loss import *

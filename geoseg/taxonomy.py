@@ -77,23 +77,10 @@ OEM_TO_STUDENT_PRETRAIN = {
 }
 
 
-def oem_to_student_kd(alpha: float = 0.7):
-    """OEM native index -> list of (student_index, weight) for KD soft targets.
-
-    Table 1, KD column. `alpha` is the Rangeland->Grassland share (1-alpha -> Seminatural).
-    Each row's weights sum to 1.0.
-    """
-    return {
-        0: [(0, 1.0)],                      # Unknown     -> Background
-        1: [(5, 1.0)],                      # Bareland    -> Seminatural      (KD-only)
-        2: [(2, alpha), (5, 1.0 - alpha)],  # Rangeland   -> Grassland/Seminatural
-        3: [(4, 1.0)],                      # Developed   -> Settlement
-        4: [(4, 1.0)],                      # Road        -> Settlement
-        5: [(1, 1.0)],                      # Tree        -> Forest
-        6: [(0, 1.0)],                      # Water       -> Background
-        7: [(3, 1.0)],                      # Agriculture -> Cropland
-        8: [(4, 1.0)],                      # Building    -> Settlement
-    }
+# The legacy name-based KD soft map (oem_to_student_kd) was REMOVED 2026-06-19.
+# The campaign KD map is grounded in the teacher's empirical confusion:
+# geoseg/utils/kd_utils.build_mapping_from_confusion("B"). Pre-training uses
+# OEM_TO_STUDENT_PRETRAIN (above) = argmax of that same confusion.
 
 
 # ---------------------------------------------------------------------------

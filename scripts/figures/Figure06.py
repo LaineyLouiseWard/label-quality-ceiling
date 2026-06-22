@@ -2,11 +2,15 @@
 """
 scripts/figures/Figure06.py
 
-Stage 4 sampling weight distribution.
+Stage 3 sampling weight distribution.
 
-Loads the pre-computed Stage 4 hardness × minority-aware sampling weights
-from artifacts/sampler_weights.tsv, computes summary statistics,
-plots a histogram, and writes a numeric summary.
+Loads the pre-computed Stage 3 class-balanced (clsbal) sampling weights
+from artifacts/sampler_weights_clsbal.tsv, computes summary statistics,
+plots a histogram, and prints the summary statistics to stdout.
+
+The shipped Stage 3 sampler is class-balanced frequency-only weighting
+(Kang 2020): each tile's weight is set from its class composition so that
+rare classes are upsampled, independent of any per-tile hardness term.
 
 Outputs:
   figures/Figure06.pdf
@@ -36,7 +40,7 @@ def find_repo_root(start: Path) -> Path:
 
 repo_root = find_repo_root(Path(__file__).parent)
 
-WEIGHTS_TSV = repo_root / "artifacts" / "sampler_weights.tsv"
+WEIGHTS_TSV = repo_root / "artifacts" / "sampler_weights_clsbal.tsv"
 OUT_PDF     = repo_root / "figures" / "Figure06.pdf"
 OUT_PDF.parent.mkdir(parents=True, exist_ok=True)
 
@@ -45,8 +49,10 @@ OUT_PDF.parent.mkdir(parents=True, exist_ok=True)
 # Style — match existing figure scripts
 # ---------------------------------------------------------------------------
 mpl.rcParams.update({
+    "text.usetex":      True,
     "font.family":      "serif",
-    "font.serif":       ["Times New Roman", "Times", "DejaVu Serif"],
+    "font.serif": ["Computer Modern Roman"],
+    "text.latex.preamble": r"\usepackage{lmodern}",
     "mathtext.fontset": "stix",
     "font.size":        12,
     "axes.titlesize":   14,
@@ -95,6 +101,15 @@ stats = {
 # ---------------------------------------------------------------------------
 # Plot
 # ---------------------------------------------------------------------------
+# NOTE (post-run visual review): clsbal is class-balanced *frequency-only*
+# weighting, so the weights take only a handful of distinct values (one per
+# class-composition bucket) rather than the continuous spread the retired A0
+# hardness x richness sampler produced. A fine 60-bin histogram may therefore
+# render as a few isolated spikes (near-degenerate). Inspect the rendered
+# Figure06.pdf once the final-run weights exist; if it reads as degenerate,
+# switch to a small number of bins / a bar-per-distinct-value or a count
+# annotation. Data + labels are correct here; only the bin choice may need a
+# cosmetic tweak.
 fig, ax = plt.subplots(figsize=(7.5, 4.5), dpi=300)
 
 ax.hist(

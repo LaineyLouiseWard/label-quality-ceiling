@@ -37,8 +37,10 @@ import rasterio
 # ----------------------------
 mpl.rcParams.update(
     {
+        "text.usetex": True,
         "font.family": "serif",
-        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+        "font.serif": ["Computer Modern Roman"],
+        "text.latex.preamble": r"\usepackage{lmodern}",
         "mathtext.fontset": "stix",
         "axes.titlesize": 12,
         "legend.fontsize": 10,

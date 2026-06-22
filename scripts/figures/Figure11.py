@@ -2,12 +2,12 @@
 """
 scripts/figures/Figure11.py
 
-Quantify how Stage 4 (KD; repo folder stage4_kd) changes predictions vs Stage 1 baseline,
+Quantify how Stage 3 (clsbal; final model) changes predictions vs Stage 1 baseline,
 per class, over an entire split.
 
 For each foreground class c (1..5), compute on GT pixels (gt==c), excluding gt==0:
-  FIX  = baseline wrong  & KD correct
-  BREAK= baseline correct & KD wrong
+  FIX  = baseline wrong  & final correct
+  BREAK= baseline correct & final wrong
 
 Reported as percentages of GT pixels of that class.
 
@@ -17,7 +17,7 @@ Outputs:
 Notes:
   - Uses BiodiversityValDataset / BiodiversityTestWithMasksDataset (same as Figure08.py).
   - Uses canonical dataset CLASSES + PALETTE (exact colours).
-  - Paper naming: "Stage 4" corresponds to repo checkpoint folder "stage4_kd".
+  - Paper naming: "Stage 3" (clsbal; final model) corresponds to repo checkpoint folder "stage3_clsbal".
 """
 
 from __future__ import annotations
@@ -61,8 +61,10 @@ from geoseg.models.ftunetformer import ft_unetformer  # noqa: E402
 # -----------------------------------------------------------------------------
 def set_plot_style() -> None:
     plt.rcParams.update({
+        "text.usetex": True,
         "font.family": "serif",
-        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+        "font.serif": ["Computer Modern Roman"],
+        "text.latex.preamble": r"\usepackage{lmodern}",
         "mathtext.fontset": "stix",
         "font.size": 14,
         "axes.titlesize": 16,
@@ -180,7 +182,7 @@ def compute_fix_break_rates(
     data_root: Path,
     split: str,
     net_baseline: torch.nn.Module,
-    net_kd: torch.nn.Module,
+    net_final: torch.nn.Module,
     device: torch.device,
 ) -> Tuple[Dict[str, float], Dict[str, float], Dict[str, int]]:
     """
@@ -206,7 +208,7 @@ def compute_fix_break_rates(
             continue
 
         pred_base = predict_mask(net_baseline, img_t, device)
-        pred_kd = predict_mask(net_kd, img_t, device)
+        pred_final = predict_mask(net_final, img_t, device)
 
         # Evaluate per class on GT pixels
         for cid in FOREGROUND_IDS:
@@ -217,10 +219,10 @@ def compute_fix_break_rates(
                 continue
 
             b_correct = (pred_base == gt) & gt_c
-            k_correct = (pred_kd == gt) & gt_c
+            f_correct = (pred_final == gt) & gt_c
 
-            fixes = int((~b_correct & k_correct).sum())     # baseline wrong -> KD correct
-            breaks = int((b_correct & ~k_correct).sum())    # baseline correct -> KD wrong
+            fixes = int((~b_correct & f_correct).sum())     # baseline wrong -> final correct
+            breaks = int((b_correct & ~f_correct).sum())    # baseline correct -> final wrong
 
             gt_counts[cls_name] += n
             fix_counts[cls_name] += fixes
@@ -266,7 +268,7 @@ def plot_fix_break_bars(
         color=colours,
         edgecolor="black",
         linewidth=0.6,
-        label="KD fixes baseline errors",
+        label="Final model fixes baseline errors",
     )
 
     # BREAK bars (hatched, same colour)
@@ -279,7 +281,7 @@ def plot_fix_break_bars(
         linewidth=0.6,
         hatch="///",
         alpha=0.95,
-        label="KD introduces new errors",
+        label="Final model introduces new errors",
     )
 
     # Net improvement annotations above each class pair
@@ -295,7 +297,7 @@ def plot_fix_break_bars(
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
 
-    ax.set_ylabel("Pixels (% of GT class pixels)")
+    ax.set_ylabel("Pixels (\\% of GT class pixels)")
     ax.set_title(title)
 
     # Horizontal gridlines only
@@ -321,9 +323,9 @@ def main() -> None:
     ap.add_argument("--split", default="val", choices=["val", "test"])
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
 
-    # Baseline and KD checkpoints (match your repo folders)
+    # Baseline and final (clsbal) checkpoints (match your repo folders)
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
-    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_kd")  # paper Stage 4
+    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3_clsbal")  # paper Stage 3 (final)
 
     ap.add_argument("--out-pdf", default="figures/Figure11.pdf")
 
@@ -336,22 +338,22 @@ def main() -> None:
 
     data_root = (rr / args.data_root).resolve()
     ckpt_s1 = resolve_ckpt(str((rr / args.stage1_ckpt).resolve()))
-    ckpt_kd = resolve_ckpt(str((rr / args.stage4_ckpt).resolve()))
+    ckpt_final = resolve_ckpt(str((rr / args.stage3_ckpt).resolve()))
 
     print("Repo root:", rr)
     print("Data root:", data_root)
     print("Split:", args.split)
     print("Stage 1 ckpt:", ckpt_s1)
-    print("Stage 4 (repo stage4_kd) ckpt:", ckpt_kd)
+    print("Stage 3 (repo stage3_clsbal; final) ckpt:", ckpt_final)
 
     net_s1 = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_s1).to(device)
-    net_kd = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_kd).to(device)
+    net_final = load_net_from_lightning_ckpt(build_ftunetformer(), ckpt_final).to(device)
 
     fix_pct, break_pct, gt_counts = compute_fix_break_rates(
         data_root=data_root,
         split=args.split,
         net_baseline=net_s1,
-        net_kd=net_kd,
+        net_final=net_final,
         device=device,
     )
 
@@ -362,7 +364,7 @@ def main() -> None:
     out_pdf = (rr / args.out_pdf).resolve()
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
 
-    #title = f"Baseline → KD pixel transitions per class ({args.split} split)"
+    #title = f"Baseline (Stage 1) → final (Stage 3 clsbal) pixel transitions per class ({args.split} split)"
     plot_fix_break_bars(fix_pct, break_pct, out_pdf, title=None)
 
 

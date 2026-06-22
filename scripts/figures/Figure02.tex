@@ -11,6 +11,7 @@
 % vs external supervision (orange); black ring = used in this study.
 \documentclass[border=6pt]{standalone}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage{tikz}
 \usetikzlibrary{positioning, arrows.meta, backgrounds}
 
@@ -89,7 +90,7 @@
 \node[mkint] at (6.0,8.5) {};    % copy-paste (Med / High)
 % used in this study (black ring)
 \node[mkextours] at (3.5,7.25) {};  % pre-training (Low / Med-High)
-\node[mkintours] at (3.75,8.5) {};  % replication  (Low / High)
+\node[mkint] at (3.75,8.5) {};  % replication  (Low / High) -- demoted: known internal-curation method, not used in this study
 \node[mkintours] at (7.25,7.25) {}; % hard x minority (Med-High / Med-High)
 \node[mkextours] at (8.5,4.75) {};  % kd (High / Low-Med)
 

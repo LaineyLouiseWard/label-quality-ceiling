@@ -232,7 +232,8 @@ def wing_loss(output: torch.Tensor, target: torch.Tensor, width=5, curvature=0.5
 
 
 def label_smoothed_nll_loss(
-    lprobs: torch.Tensor, target: torch.Tensor, epsilon: float, ignore_index=None, reduction="mean", dim=-1
+    lprobs: torch.Tensor, target: torch.Tensor, epsilon: float, ignore_index=None, reduction="mean", dim=-1,
+    weight=None,
 ) -> torch.Tensor:
     """
 
@@ -243,6 +244,11 @@ def label_smoothed_nll_loss(
     :param epsilon:
     :param ignore_index:
     :param reduction:
+    :param weight: optional per-class weight vector (length = num_classes), indexed by the
+        ground-truth class of each pixel. Applied to the NLL term ONLY, per-pixel, AFTER the
+        gather and the ignore-pad fill and BEFORE the reduction (Tian et al. 2022, Recall Loss,
+        Eq. 5). The smooth term is left unweighted. ``weight[ignore_index]`` should be 0
+        (those pixels are already zeroed by the pad fill, so it is a no-op there either way).
     :return:
     """
     if target.dim() == lprobs.dim() - 1:
@@ -258,9 +264,16 @@ def label_smoothed_nll_loss(
         # smooth_loss.masked_fill_(pad_mask, 0.0)
         nll_loss = nll_loss.masked_fill(pad_mask, 0.0)
         smooth_loss = smooth_loss.masked_fill(pad_mask, 0.0)
+        if weight is not None:
+            # per-pixel weight by the GROUND-TRUTH class (target already pad-filled to 0).
+            w = weight.to(device=nll_loss.device, dtype=nll_loss.dtype)
+            nll_loss = nll_loss * w[target]
     else:
         nll_loss = -lprobs.gather(dim=dim, index=target)
         smooth_loss = -lprobs.sum(dim=dim, keepdim=True)
+        if weight is not None:
+            w = weight.to(device=nll_loss.device, dtype=nll_loss.dtype)
+            nll_loss = nll_loss * w[target]
 
         nll_loss = nll_loss.squeeze(dim)
         smooth_loss = smooth_loss.squeeze(dim)

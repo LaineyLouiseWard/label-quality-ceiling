@@ -104,11 +104,183 @@ def _val_tf():
 
 
 # -----------------------------------------------------------------------------
+# Lever 1 — Settlement copy-paste augmentation (behind a flag; default OFF)
+# -----------------------------------------------------------------------------
+# Hard-mask composite (MSAug Eqs 14-16, Gong 2024; Ghiasi 2021): one binary mask drives
+# everything, the IMAGE is copied and the LABEL is set HARD to Settlement (never blended /
+# never interpolated). Settlement is pasted only onto Background (dst==0). Photometric jitter
+# is applied LATER, image-only and globally, by _train_tf() on the composited tile.
+SETTLEMENT_INDEX = 4
+assert STUDENT_CLASSES[SETTLEMENT_INDEX] == "Settlement", (
+    f"copy-paste donor class id {SETTLEMENT_INDEX} is not Settlement: "
+    f"{STUDENT_CLASSES[SETTLEMENT_INDEX]!r}"
+)
+
+_COPYPASTE_CFG: dict | None = None
+_COPYPASTE_DONORS: dict[str, list[str]] = {}  # donor_root -> list of Settlement-bearing img_ids
+_COPYPASTE_DONOR_W: dict = {}  # cache: (donor_root, quality_tsv, temp) -> (ids, prob)
+
+
+def configure_settlement_copypaste(
+    enabled: bool,
+    donor_root: str = "data/biodiversity_split/train",
+    prob: float = 0.5,
+    n_donors: int = 1,
+    flip: bool = True,
+    target_class: int = SETTLEMENT_INDEX,
+    targeted: bool = False,
+    quality_tsv: str = "artifacts/donor_quality_settlement.tsv",
+    quality_temp: float = 1.0,
+    paste_onto=(0,),
+):
+    """Enable/disable Settlement copy-paste in train_aug_random (Lever 1). Call from an arm config.
+
+    targeted=True selects donors weighted by Stage-2b Settlement CONFIDENCE (MSAug-style: paste clean,
+    well-segmented instances, down-weight noisy/ambiguous Settlement), read from quality_tsv (built by
+    scripts/data_prep/build_donor_quality.py). targeted=False = uniform-random donor (the baseline).
+    quality_temp sharpens the confidence weighting (prob ∝ confidence**temp).
+    """
+    global _COPYPASTE_CFG
+    if not enabled:
+        _COPYPASTE_CFG = None
+        return
+    _COPYPASTE_CFG = dict(
+        donor_root=donor_root, prob=float(prob), n_donors=int(n_donors),
+        flip=bool(flip), target_class=int(target_class),
+        targeted=bool(targeted), quality_tsv=str(quality_tsv), quality_temp=float(quality_temp),
+        paste_onto=tuple(int(c) for c in paste_onto),
+    )
+
+
+def _donor_ids(donor_root: str, target_class: int) -> list[str]:
+    """Lazily index donor tiles that contain the target class (scan mask PNGs once)."""
+    if donor_root in _COPYPASTE_DONORS:
+        return _COPYPASTE_DONORS[donor_root]
+    mask_dir = osp.join(donor_root, "masks")
+    ids = []
+    for f in sorted(os.listdir(mask_dir)):
+        if not f.endswith(".png"):
+            continue
+        m = np.array(Image.open(osp.join(mask_dir, f)).convert("L"))
+        if (m == target_class).any():
+            ids.append(osp.splitext(f)[0])
+    _COPYPASTE_DONORS[donor_root] = ids
+    return ids
+
+
+def _donor_pool(cfg):
+    """Return (ids, prob). prob is None for uniform-random; a confidence-weighted distribution
+    (over the Settlement-bearing donors that have a quality score) when targeted."""
+    base_ids = _donor_ids(cfg["donor_root"], cfg["target_class"])
+    if not cfg.get("targeted"):
+        return base_ids, None
+    key = (cfg["donor_root"], cfg["quality_tsv"], cfg["quality_temp"])
+    if key in _COPYPASTE_DONOR_W:
+        return _COPYPASTE_DONOR_W[key]
+    qpath = cfg["quality_tsv"]
+    if not osp.isabs(qpath):
+        # resolve relative to the repo root (the dir containing artifacts/)
+        here = osp.dirname(osp.dirname(osp.dirname(osp.abspath(__file__))))
+        qpath = osp.join(here, cfg["quality_tsv"])
+    conf = {}
+    with open(qpath) as f:
+        header = f.readline()  # img_id\tconfidence\trecall\tarea
+        for ln in f:
+            ln = ln.strip()
+            if not ln:
+                continue
+            parts = ln.split("\t")
+            conf[parts[0]] = float(parts[1])
+    base_set = set(base_ids)
+    ids = [i for i in conf if i in base_set]
+    if not ids:  # fallback to uniform if the quality file doesn't align
+        _COPYPASTE_DONOR_W[key] = (base_ids, None)
+        return base_ids, None
+    w = np.array([conf[i] for i in ids], dtype=np.float64) ** cfg["quality_temp"]
+    p = w / w.sum()
+    _COPYPASTE_DONOR_W[key] = (ids, p)
+    return ids, p
+
+
+def _compose_settlement(dst_img, dst_mask, src_img, src_mask, target_class=SETTLEMENT_INDEX,
+                        paste_onto=(0,)):
+    """Pure hard composite. Returns (out_img, out_mask, paste, alpha).
+
+    alpha = donor target blob (src_mask==target_class); paste = alpha & (dst_mask ∈ paste_onto). The
+    label is set HARD (out_mask[paste]=target_class) — never blended, never NEAREST-of-a-fractional.
+
+    paste_onto = destination class ids the Settlement blob may overwrite:
+      (0,)      ORIGINAL Background-only rule. Label-safe but a near-no-op on this data: 63% of train
+                tiles have ZERO Background (median 0%), so the blob∩Background is empty and nothing is
+                deposited (see docs/MINORITY_STRATEGY §16.3). NON-standard vs Ghiasi 2021 (random
+                placement + occlusion).
+      (0,2,3)   TARGETED: Background+Grassland+Cropland = open land where rural Settlement plausibly
+                sits. Deposits on ~every tile, lands at the Grassland boundary where Settlement is
+                actually confused (§15.1), and never overwrites Forest/Settlement/Semi-natural.
+    """
+    assert dst_img.shape[:2] == dst_mask.shape, (dst_img.shape, dst_mask.shape)
+    assert src_img.shape[:2] == src_mask.shape, (src_img.shape, src_mask.shape)
+    assert dst_img.shape == src_img.shape, (dst_img.shape, src_img.shape)
+    alpha = src_mask == target_class
+    paste = alpha & np.isin(dst_mask, np.asarray(paste_onto))
+    out_img = dst_img.copy()
+    out_mask = dst_mask.copy()
+    out_img[paste] = src_img[paste]          # boolean mask keeps the channel axis -> pixel-locked
+    out_mask[paste] = target_class           # HARD label
+    return out_img, out_mask, paste, alpha
+
+
+def _load_donor(donor_root: str, img_id: str, size_hw: tuple[int, int], flip: bool):
+    """Load a donor tile and resize it to the destination size (img BICUBIC, mask NEAREST)."""
+    h, w = size_hw
+    img = _read_tif_as_rgb_uint8(osp.join(donor_root, "images", img_id + ".tif")).resize(
+        (w, h), Image.BICUBIC
+    )
+    mask = Image.open(osp.join(donor_root, "masks", img_id + ".png")).convert("L").resize(
+        (w, h), Image.NEAREST
+    )
+    src_img = np.array(img)
+    src_mask = np.array(mask)
+    if flip:
+        if np.random.rand() < 0.5:  # horizontal — exact (no interpolation) for img AND mask
+            src_img = src_img[:, ::-1].copy()
+            src_mask = src_mask[:, ::-1].copy()
+        if np.random.rand() < 0.5:  # vertical
+            src_img = src_img[::-1, :].copy()
+            src_mask = src_mask[::-1, :].copy()
+    return src_img, src_mask
+
+
+def _apply_settlement_copypaste(img_np, mask_np):
+    """Composite 1..n_donors Settlement blobs onto Background of (img_np, mask_np). Flag-gated.
+    Donor is uniform-random (baseline) or confidence-weighted (targeted=True)."""
+    cfg = _COPYPASTE_CFG
+    if cfg is None or np.random.rand() >= cfg["prob"]:
+        return img_np, mask_np
+    ids, p = _donor_pool(cfg)
+    if not ids:
+        return img_np, mask_np
+    out_img, out_mask = img_np, mask_np
+    for _ in range(cfg["n_donors"]):
+        j = np.random.randint(len(ids)) if p is None else int(np.random.choice(len(ids), p=p))
+        src_img, src_mask = _load_donor(cfg["donor_root"], ids[j], out_mask.shape, cfg["flip"])
+        out_img, out_mask, _, _ = _compose_settlement(
+            out_img, out_mask, src_img, src_mask, cfg["target_class"], cfg.get("paste_onto", (0,))
+        )
+    return out_img, out_mask
+
+
+# -----------------------------------------------------------------------------
 # Geometry-aware augmentation (mask-aligned)
 # -----------------------------------------------------------------------------
 
 def train_aug_random(img: Image.Image, mask: Image.Image):
-    """Stage 1/2/3 default: RandomScale + SmartCropV1 -> 512x512."""
+    """Stage 1/2/3 default: RandomScale + SmartCropV1 -> 512x512.
+
+    If Settlement copy-paste is configured (Lever 1), the hard composite is applied AFTER the
+    crop + 255->0 safety and BEFORE _train_tf() — so the global, image-only photometric jitter in
+    _train_tf() lands on the whole composited tile and the label stays hard.
+    """
     crop_aug = Compose(
         [
             RandomScale([0.75, 1.0, 1.25, 1.5], mode="value"),
@@ -121,6 +293,9 @@ def train_aug_random(img: Image.Image, mask: Image.Image):
 
     # Safety: remove SmartCrop padding label if present
     mask_np[mask_np == 255] = 0
+
+    if _COPYPASTE_CFG is not None:
+        img_np, mask_np = _apply_settlement_copypaste(img_np, mask_np)
 
     out = _train_tf()(image=img_np, mask=mask_np)
     return out["image"], out["mask"]

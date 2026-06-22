@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A4: Validation-test per-class IoU gap for the Stage 4 (KD) model.
+"""A4: Validation-test per-class IoU gap for the Stage 3 (clsbal) final model.
 
 Loads val and test metrics.json, computes per-class IoU difference,
 and prints sorted by gap magnitude.
@@ -16,8 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from utils import load_metrics, REPO_ROOT
 
-VAL_METRICS = REPO_ROOT / "evaluation/evaluation_results/val/stage4_kd/metrics.json"
-TEST_METRICS = REPO_ROOT / "evaluation/evaluation_results/test/stage4_kd/metrics.json"
+VAL_METRICS = REPO_ROOT / "evaluation/evaluation_results/val/stage3_clsbal/metrics.json"
+TEST_METRICS = REPO_ROOT / "evaluation/evaluation_results/test/stage3_clsbal/metrics.json"
 
 # Foreground classes only (skip Background)
 FOREGROUND_CLASSES = [
@@ -39,7 +39,7 @@ SHORT_NAMES = {
 
 def main() -> None:
     print("=" * 60)
-    print("A4: Validation-Test Per-Class IoU Gap (Stage 4)")
+    print("A4: Validation-Test Per-Class IoU Gap (Stage 3 clsbal, final model)")
     print("=" * 60)
 
     val = load_metrics(VAL_METRICS)

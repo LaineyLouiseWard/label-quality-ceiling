@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""A6: Gini coefficient and summary statistics for Stage 4 sampling weights.
+"""A6: Gini coefficient and summary statistics for the Stage 3 clsbal sampling weights.
 
-Computes the Gini coefficient from the weight distribution and prints
-descriptive statistics.
+Computes the Gini coefficient from the class-balanced (clsbal, frequency-only,
+Kang 2020) sampling-weight distribution and prints descriptive statistics.
 
 Run:
   python scripts/analysis/a6_weight_gini.py
@@ -14,7 +14,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils import load_weights_tsv
+from utils import REPO_ROOT, load_weights_tsv
+
+# Stage 3 ships the class-balanced (clsbal) sampler; the retired A0 hardness×richness
+# weights live in sampler_weights.tsv and are no longer analysed here.
+CLSBAL_WEIGHTS = REPO_ROOT / "artifacts" / "sampler_weights_clsbal.tsv"
 
 
 def gini_coefficient(values: list[float]) -> float:
@@ -46,10 +50,14 @@ def percentile(sorted_vals: list[float], p: float) -> float:
 
 def main() -> None:
     print("=" * 60)
-    print("A6: Stage 4 Sampling Weight Gini Coefficient")
+    print("A6: Stage 3 clsbal Sampling Weight Gini Coefficient")
     print("=" * 60)
 
-    weights = load_weights_tsv()
+    # FLAG (post-run visual review): clsbal is a class-balanced frequency-only sampler,
+    # so its weight distribution differs from the retired A0 hardness×richness sampler.
+    # The reported Gini will change from the A0 value of 0.36 to clsbal's value; update
+    # the manuscript figure/text once this is regenerated against the final run.
+    weights = load_weights_tsv(CLSBAL_WEIGHTS)
     vals = sorted(weights.values())
     n = len(vals)
 

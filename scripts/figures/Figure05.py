@@ -25,13 +25,30 @@ Output:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+
+def find_repo_root_for_imports() -> Path:
+    p = Path(__file__).resolve()
+    for parent in [p.parent, *p.parents]:
+        if (parent / "geoseg").is_dir():
+            return parent
+    raise RuntimeError("Could not find repo root for imports")
+
+
+repo_root = find_repo_root_for_imports()
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
 
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 from PIL import Image
 import rasterio
+
+from geoseg.taxonomy import OEM_TO_STUDENT_PRETRAIN
 
 
 def find_repo_root() -> Path:
@@ -48,8 +65,10 @@ def find_repo_root() -> Path:
 REPO_ROOT = find_repo_root()
 
 mpl.rcParams.update({
+    "text.usetex": True,
     "font.family": "serif",
-    "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+    "font.serif": ["Computer Modern Roman"],
+    "text.latex.preamble": r"\usepackage{lmodern}",
     "mathtext.fontset": "stix",
 })
 
@@ -63,20 +82,24 @@ BIO_COLOR = {
     4: [59, 141, 247],   # Settlement
     5: [255, 214, 33],   # Semi-natural grassland
 }
-BIO_NAMES = {1: "Forest", 2: "Grassland", 3: "Cropland", 4: "Settlement", 5: "Semi-nat."}
+# Display names match the OEM<->Biodiversity mapping schematic (Figure_mapping.tex)
+# so the two figures read as a connected pair (shared palette + shared class names).
+BIO_NAMES = {1: "Forest land", 2: "Grassland", 3: "Cropland", 4: "Settlement", 5: "Semi-nat."}
 BIO_IDS = [1, 2, 3, 4, 5]
 
 # -----------------------------------------------------------------------------
 # OpenEarthMap (auxiliary dataset) — shown in the HARMONISED 6-class Biodiversity
 # taxonomy used during pre-training (Table "Taxonomy harmonisation", main.tex).
-# Native OEM class id -> Biodiversity class id (pre-training, hard labels):
-#   Tree(5)->Forest(1); Rangeland(2)->Grassland(2); Agriculture(7)->Cropland(3);
-#   Building(8)/Developed space(3)/Road(4)->Settlement(4);
-#   Bareland(1)+Water(6)->Background(0)  (bareland->Semi-nat only during KD).
-# No native class maps to semi-natural grassland under the pre-training mapping,
-# so OEM contributes no semi-natural exposure (an honest, informative zero).
+# Native OEM class id -> Biodiversity class id (pre-training, hard labels), GROUNDED
+# from the teacher's empirical OEM->target confusion (geoseg.taxonomy.OEM_TO_STUDENT_PRETRAIN;
+# docs/KD_MAPPING_GROUNDING.md):
+#   Tree(5)->Forest(1); Rangeland(2)+Water(6)+Agriculture(7)->Grassland(2);
+#   Developed space(3)+Road(4)+Building(8)->Settlement(4); Bareland(1)->Semi-natural(5).
+# No native class argmaxes to Cropland, so OEM contributes no Cropland exposure;
+# Semi-natural is now seeded by Bareland (in pre-training, not KD-only), and Grassland
+# absorbs Agriculture (Irish "agriculture" is pasture) plus Water.
 # -----------------------------------------------------------------------------
-OEM_NATIVE_TO_BIO = {1: 0, 2: 2, 3: 4, 4: 4, 5: 1, 6: 0, 7: 3, 8: 4}
+OEM_NATIVE_TO_BIO = {k: v for k, v in OEM_TO_STUDENT_PRETRAIN.items() if k != 0}
 # Reverse: Biodiversity foreground class id -> native OEM ids that map onto it
 BIO_FROM_OEM = {k: [n for n, b in OEM_NATIVE_TO_BIO.items() if b == k] for k in BIO_IDS}
 
@@ -148,6 +171,13 @@ def _barh(ax, ids, labels, colors, values, *, xlim, xticks, show_labels, letter,
     ax.grid(True, axis="x", alpha=0.25)
     ax.set_axisbelow(True)
     ax.tick_params(axis="x", labelsize=13)
+    # Annotate near-zero bars with an explicit "0.00" so an absent class reads as an
+    # intentional informative zero, not a render glitch (e.g. OEM Cropland under grounding).
+    span = xlim[1] - xlim[0]
+    for yi, v in zip(y, values):
+        if v < 0.005 * span:
+            ax.text(0.006 * span, yi, "0.00", ha="left", va="center",
+                    fontsize=11, color="#444444")
 
 
 def main():
@@ -183,6 +213,20 @@ def main():
              ha="center", va="center", fontsize=15, fontweight="bold")
     fig.text(0.012, 0.30, "OpenEarthMap\n(auxiliary)", rotation=90,
              ha="center", va="center", fontsize=15, fontweight="bold")
+
+    # Shared "Biodiversity classes" swatch key — canonical STUDENT_PALETTE colours and the
+    # same display names used by the OEM<->Biodiversity mapping schematic (Figure_mapping.tex),
+    # so the distribution figure and the mapping schematic read as a connected pair.
+    key_handles = [
+        Patch(facecolor=np.array(BIO_COLOR[k]) / 255.0, edgecolor="none", label=BIO_NAMES[k])
+        for k in BIO_IDS
+    ]
+    fig.legend(
+        handles=key_handles, title="Biodiversity classes",
+        loc="lower center", ncol=len(BIO_IDS), frameon=False,
+        bbox_to_anchor=(0.55, 1.0), fontsize=12, title_fontsize=13,
+        handlelength=1.1, handleheight=1.0, columnspacing=1.4,
+    )
 
     out = REPO_ROOT / "figures" / "Figure05.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)

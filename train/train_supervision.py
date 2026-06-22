@@ -182,9 +182,20 @@ def _load_student_weights_from_pl_ckpt(model: nn.Module, ckpt_path: str):
     sd = {k.replace("_orig_mod.", "", 1): v for k, v in sd.items()}
 
     missing, unexpected = model.load_state_dict(sd, strict=False)
-    print("Loaded pretrained student weights.")
-    if missing:
-        print("Missing (non-fatal):", missing[:10])
+    # Guard against a SILENT transfer failure. strict=False means a prefix/arch mismatch loads FEW
+    # weights and the model trains from ~random init while looking fine — the model's "Missing" list is
+    # the only clue. Every "transfer" ablation cell (stage2b, stage3) depends on this load, so fail LOUD.
+    n_total = len(model.state_dict())
+    n_loaded = n_total - len(missing)
+    frac = n_loaded / max(n_total, 1)
+    print(f"Loaded pretrained student weights from {ckpt_path}: "
+          f"{n_loaded}/{n_total} params ({frac:.1%}); {len(missing)} missing, {len(unexpected)} unexpected.")
+    if frac < 0.9:
+        raise RuntimeError(
+            f"Pretrained transfer load FAILED: only {frac:.1%} of model params matched {ckpt_path} "
+            f"(missing[:10]={missing[:10]}). The model would train from ~random init, silently breaking "
+            f"the transfer cell. Check the checkpoint path / key-prefix stripping before launching."
+        )
     if unexpected:
         print("Unexpected (non-fatal):", unexpected[:10])
 

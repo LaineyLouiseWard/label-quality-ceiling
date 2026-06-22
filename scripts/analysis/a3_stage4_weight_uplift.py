@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""A3: Stage 4 sampling weight uplift for minority-containing tiles.
+"""A3: Stage 3 clsbal sampling weight uplift for minority-containing tiles.
 
 Partitions tiles by minority class presence (from augmentation list),
-computes mean weight per group, and reports uplift ratios.
+computes mean weight per group, and reports uplift ratios for the shipped
+Stage-3 class-balanced (clsbal) frequency-only sampler.
 
 Run:
   python scripts/analysis/a3_stage4_weight_uplift.py
@@ -14,7 +15,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from utils import load_weights_tsv, load_augmentation_list
+from utils import REPO_ROOT, load_weights_tsv, load_augmentation_list
+
+CLSBAL_WEIGHTS = REPO_ROOT / "artifacts" / "sampler_weights_clsbal.tsv"
 
 
 def mean(values: list[float]) -> float:
@@ -23,10 +26,10 @@ def mean(values: list[float]) -> float:
 
 def main() -> None:
     print("=" * 60)
-    print("A3: Stage 4 Sampling Weight Uplift")
+    print("A3: Stage 3 clsbal Sampling Weight Uplift")
     print("=" * 60)
 
-    weights = load_weights_tsv()
+    weights = load_weights_tsv(CLSBAL_WEIGHTS)
     aug = load_augmentation_list()
 
     settlement_ids = set(aug["settlement_images"])

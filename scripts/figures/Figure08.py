@@ -4,8 +4,8 @@ scripts/figures/Figure08.py
 
 Qualitative ablation comparison on FOUR tiles, shown as 4 columns.
 
-Layout (6 rows x 4 columns):
-  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3, Stage 4
+Layout (5 rows x 4 columns):
+  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3
   Columns: (a)–(d) = four chosen tile IDs
 
 Shows RAW predictions (no extra AOI masking beyond GT==0 invalid masking used for display).
@@ -51,8 +51,10 @@ from geoseg.models.ftunetformer import ft_unetformer
 # -----------------------------------------------------------------------------
 def set_plot_style() -> None:
     plt.rcParams.update({
+        "text.usetex": True,
         "font.family": "serif",
-        "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+        "font.serif": ["Computer Modern Roman"],
+        "text.latex.preamble": r"\usepackage{lmodern}",
         "mathtext.fontset": "stix",
         "font.size": 12,
         "axes.titlesize": 14,
@@ -90,7 +92,7 @@ IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 # marking the same image region all the way down so the feature's evolution across
 # stages is trackable (settlement consolidating, semi-natural recovering, roads
 # remaining fragmented).
-ANNOTATED_ROWS = {"gt", "s1", "s2", "s3", "s4"}
+ANNOTATED_ROWS = {"gt", "s1", "s2", "s3"}
 HIGHLIGHT_ANNOTATIONS = [
     {  # H1: Compact settlement cluster — tile (b)
         "col": 1,
@@ -273,7 +275,7 @@ def make_grid_figure(
 
     anns = annotations if annotations else []
 
-    keys = ["img", "gt", "s1", "s2", "s3", "s4"]
+    keys = ["img", "gt", "s1", "s2", "s3"]
     for c in range(n_cols):
         col = columns[c]
         for r, k in enumerate(keys):
@@ -318,18 +320,17 @@ def make_grid_figure(
 # -----------------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--img-ids", default="biodiversity_1382,biodiversity_0259,biodiversity_2193,biodiversity_1366  ")
+    ap.add_argument("--img-ids", default="biodiversity_1382,biodiversity_0259,biodiversity_2193,biodiversity_1366")
     ap.add_argument("--data-root", default="data/biodiversity_split")
     ap.add_argument("--split-order", default="val,test")
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
     ap.add_argument("--out-path", default="figures/Figure08.pdf")
 
-    # Match the folder names under model_weights/biodiversity/ (4-stage, no-replication).
+    # Match the folder names under model_weights/biodiversity/ (3-stage, no-replication).
     ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
     # Stage 2 = deployable OEM-transfer model (2a pre-train + 2b fine-tune merged)
     ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2b_oem_finetune")
-    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3_sampler")
-    ap.add_argument("--stage4-ckpt", default="model_weights/biodiversity/stage4_kd")
+    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3_clsbal")
 
     args = ap.parse_args()
 
@@ -346,7 +347,6 @@ def main() -> None:
         "s1": resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve())),
         "s2": resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
         "s3": resolve_ckpt(str((repo_root / args.stage3_ckpt).resolve())),
-        "s4": resolve_ckpt(str((repo_root / args.stage4_ckpt).resolve())),
     }
 
     nets: Dict[str, torch.nn.Module] = {}
@@ -367,7 +367,7 @@ def main() -> None:
         invalid = (gt == 0)
 
         pred: Dict[str, np.ndarray] = {}
-        for stage_key in ["s1", "s2", "s3", "s4"]:
+        for stage_key in ["s1", "s2", "s3"]:
             pred[stage_key] = predict_mask(nets[stage_key], img_t, device)
 
         columns.append({
@@ -376,7 +376,6 @@ def main() -> None:
             "s1": colorize_mask(pred["s1"], invalid=invalid),
             "s2": colorize_mask(pred["s2"], invalid=invalid),
             "s3": colorize_mask(pred["s3"], invalid=invalid),
-            "s4": colorize_mask(pred["s4"], invalid=invalid),
         })
 
         print(img_id, "outside pixels (gt==0):", int((gt == 0).sum()))
@@ -389,8 +388,7 @@ def main() -> None:
         "Ground\nTruth",
         "Stage 1:\nBaseline",
         "Stage 2:\n+OEM Transfer",
-        "Stage 3:\n+Hard × Minority\nSampling",
-        "Stage 4:\n+Knowledge\nDistillation",
+        "Stage 3:\n+Class-balanced\nsampler (clsbal)",
     ]
 
     handles = make_legend_handles(include_background=True)

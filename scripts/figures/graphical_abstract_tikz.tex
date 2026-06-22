@@ -18,6 +18,7 @@
 \usepackage{tikz}
 \usetikzlibrary{positioning, arrows.meta, calc}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 
 % ── Class colours (biodiversity_dataset.py palette) ────────────────────
 \definecolor{clsForest}{HTML}{FA3E77}
@@ -63,8 +64,8 @@
   \node[tlabel] at (s1.north) {Baseline (Stage~1)};
 
   \node[inner sep=0pt, right=\tgap cm of s1] (s5)
-    {\includegraphics[width=\tw]{biodiversity_1310_stage6_kd.png}};
-  \node[tlabel] at (s5.north) {Final (Stage~5)};
+    {\includegraphics[width=\tw]{biodiversity_1310_stage4_kd.png}};
+  \node[tlabel] at (s5.north) {Final (Stage~4)};
 
   % ── Arrows between tiles (dark grey) ────────────────────────────────
   \draw[arr]  ([xshift=1.5mm] rgb.east) -- ([xshift=-1.5mm] gt.west);
@@ -103,7 +104,7 @@
   }
 
   % -- Key result box: bottom-aligned with stage pipeline boxes --
-  % (placed after pipeline so we can reference stage5.south)
+  % (placed after pipeline so we can reference stage4.south)
   % Placeholder — actual node drawn after pipeline section below.
 
   % ════════════════════════════════════════════════════════════════════
@@ -122,14 +123,13 @@
     \global\let\pipeWtotal\pipeWtotal
   }];
 
-  % Box widths: proportional weights (S1 narrow, S3/S4 wider)
-  % Weights: 0.75 + 0.95 + 1.15 + 1.15 + 1.00 = 5.00
-  \pgfmathsetmacro{\boxPool}{\pipeWtotal - 4*\bgap}
-  \pgfmathsetmacro{\bwA}{\boxPool * 0.75 / 5}   % Stage 1: Baseline
-  \pgfmathsetmacro{\bwB}{\boxPool * 0.95 / 5}   % Stage 2: Minority replication
-  \pgfmathsetmacro{\bwC}{\boxPool * 1.15 / 5}   % Stage 3: OEM pre-train & fine-tune
-  \pgfmathsetmacro{\bwD}{\boxPool * 1.15 / 5}   % Stage 4: Hard × minority sampling
-  \pgfmathsetmacro{\bwE}{\boxPool * 1.00 / 5}   % Stage 5: Knowledge distillation
+  % Box widths: proportional weights (S1 narrow, S2/S3 wider). 4 boxes, 3 gaps.
+  % Weights: 0.75 + 1.15 + 1.15 + 1.00 = 4.05
+  \pgfmathsetmacro{\boxPool}{\pipeWtotal - 3*\bgap}
+  \pgfmathsetmacro{\bwA}{\boxPool * 0.75 / 4.05}   % Stage 1: Baseline
+  \pgfmathsetmacro{\bwB}{\boxPool * 1.15 / 4.05}   % Stage 2: OEM transfer
+  \pgfmathsetmacro{\bwC}{\boxPool * 1.15 / 4.05}   % Stage 3: Hard × minority sampling
+  \pgfmathsetmacro{\bwD}{\boxPool * 1.00 / 4.05}   % Stage 4: Knowledge distillation
 
   % Pipeline y-position: anchored to rgb.south west (absolute left edge)
   \def\pipeDrop{1.8}  % cm below tileMid
@@ -140,7 +140,6 @@
   \pgfmathsetmacro{\xB}{\xA + \bwA + \bgap}
   \pgfmathsetmacro{\xC}{\xB + \bwB + \bgap}
   \pgfmathsetmacro{\xD}{\xC + \bwC + \bgap}
-  \pgfmathsetmacro{\xE}{\xD + \bwD + \bgap}
 
   % Stage box style: anchor=west so left edge is placed exactly at cumulative x.
   % minimum width forces box to fill allocated span; text width constrains wrapping.
@@ -159,7 +158,7 @@
     inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
     font=\scriptsize, text=tileLabel, align=center, anchor=west,
   ] (stage2) at ([xshift={\xB cm}, yshift=-\pipeDrop cm] rgb.south west) {
-    {\bfseries Stage~2}\\[-1pt] Minority\\[-1pt] replication
+    {\bfseries Stage~2}\\[-1pt] OEM pre-train\\[-1pt] \& fine-tune
   };
   % Stage 3
   \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
@@ -167,7 +166,7 @@
     inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
     font=\scriptsize, text=tileLabel, align=center, anchor=west,
   ] (stage3) at ([xshift={\xC cm}, yshift=-\pipeDrop cm] rgb.south west) {
-    {\bfseries Stage~3}\\[-1pt] OEM pre-train\\[-1pt] \& fine-tune
+    {\bfseries Stage~3}\\[-1pt] Hard $\times$ minority\\[-1pt] sampling
   };
   % Stage 4
   \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
@@ -175,19 +174,11 @@
     inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
     font=\scriptsize, text=tileLabel, align=center, anchor=west,
   ] (stage4) at ([xshift={\xD cm}, yshift=-\pipeDrop cm] rgb.south west) {
-    {\bfseries Stage~4}\\[-1pt] Hard $\times$ minority\\[-1pt] sampling
-  };
-  % Stage 5
-  \node[draw=gray!40, line width=0.4pt, rounded corners=2pt,
-    fill=gray!4, minimum width={\bwE cm}, text width={\bwE cm - 4pt},
-    inner xsep=2pt, inner ysep=2pt, minimum height=\bh cm,
-    font=\scriptsize, text=tileLabel, align=center, anchor=west,
-  ] (stage5) at ([xshift={\xE cm}, yshift=-\pipeDrop cm] rgb.south west) {
-    {\bfseries Stage~5}\\[-1pt] Knowledge\\[-1pt] distillation
+    {\bfseries Stage~4}\\[-1pt] Knowledge\\[-1pt] distillation
   };
 
   % Arrows between pipeline stages (dark grey)
-  \foreach \a/\b in {1/2, 2/3, 3/4, 4/5} {
+  \foreach \a/\b in {1/2, 2/3, 3/4} {
     \draw[arr] (stage\a.east) -- (stage\b.west);
   }
 
@@ -202,20 +193,23 @@
   \draw[conn]
     (s1.south |- connWayY) -- ([yshift=-0.5mm] s1.south);
 
-  % Stage 5 → Final tile
+  % Stage 4 → Final tile
   \draw[connline]
-    (stage5.north) -- (stage5.north |- connWayY)
+    (stage4.north) -- (stage4.north |- connWayY)
     -- (s5.south |- connWayY);
   \draw[conn]
     (s5.south |- connWayY) -- ([yshift=-0.5mm] s5.south);
 
   % ── Key result box: bottom aligned with stage pipeline boxes ────────
+  % NUMBERS BELOW ARE [MEDIAN-SEED FILL] — placeholders carried over from the 5-stage GA;
+  % the median-seed campaign values are not in yet (no median checkpoints exist). Structure
+  % only is updated here; the Key-Result numbers + tile PNGs are deferred to the median seed.
   \node[
     draw=accentGreen, line width=0.7pt, rounded corners=3pt,
     fill=lightResultBg, inner sep=6pt,
     font=\small, text=tileLabel, align=center,
     anchor=south west,
-  ] (result) at ([xshift=10mm] s5.south east |- stage5.south) {
+  ] (result) at ([xshift=10mm] s5.south east |- stage4.south) {
     \textbf{\textcolor{accentGreen}{Key Result}}\\[4pt]
     mIoU\enspace 73\% \,$\rightarrow$\, \textbf{83\%}\\[2pt]
     {\scriptsize Settlement\enspace 68\%\,$\rightarrow$\,76\%}\\[0pt]

@@ -1,5 +1,19 @@
-"""Fig 7: Example low- and high-weight Biodiversity tiles under hard x minority-aware
-sampling (Stage 3), annotated with tile difficulty, minority richness, and resulting weight.
+"""Fig 7: Example low- and high-weight Biodiversity tiles under the Stage 3
+class-balanced (clsbal) frequency-only sampler (Kang 2020), annotated with the
+resulting sampling weight.
+
+The shipped Stage 3 sampler is FREQUENCY-ONLY: a tile's weight is the inverse
+tile-PRESENCE frequency of the rarest minority class (Settlement=4, Semi-nat.=5)
+it contains; tiles with no minority get the uniform baseline 1.0. There is no
+hardness term and no continuous pixel-richness multiplier (those belonged to the
+retired A0 hardness x richness sampler). The weight therefore takes only a few
+discrete values, so we no longer decompose it into hard/minority components.
+
+FLAG (post-run visual review): clsbal weights are discrete (baseline 1.0 vs the
+inverse-frequency value of whichever minority class is present), so the
+"low-weight vs high-weight tile" contrast here is really "no-minority baseline
+tile" vs "rarest-minority tile" rather than a continuous easy/hard spread. Confirm
+the two selected example tiles read sensibly once the final clsbal weights exist.
 
 Writes:
   figures/Figure07.pdf
@@ -28,34 +42,27 @@ if str(repo_root) not in sys.path:
 SPLIT_ROOT = repo_root / "data" / "biodiversity_split" / "train"
 MSK_DIR = SPLIT_ROOT / "masks"
 
+# Stage 3 ships the class-balanced (clsbal) frequency-only sampler.
 WEIGHTS_CANDIDATES = [
-    repo_root / "artifacts" / "sampler_weights.tsv",
+    repo_root / "artifacts" / "sampler_weights_clsbal.tsv",
 ]
 
 OUT_DIR = repo_root / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_PDF = OUT_DIR / "Figure07.pdf"
 
-# Stage 2b OEM-transfer checkpoint used to compute hardness (pixel error mass)
-STAGE2B_CKPT = repo_root / "model_weights" / "biodiversity" / "stage2b_oem_finetune" / "stage2b_oem_finetune.ckpt"
-
 print("Repo root:", repo_root)
 print("Masks dir:", MSK_DIR)
-print("Stage2b ckpt:", STAGE2B_CKPT)
 print("Output:", OUT_PDF)
 
 assert MSK_DIR.exists(), f"Missing masks dir: {MSK_DIR}"
-assert STAGE2B_CKPT.exists(), (
-    f"Missing Stage 2b checkpoint: {STAGE2B_CKPT}\n"
-    "Hardness is computed from this checkpoint (as in scripts/data_prep/build_sampler_weights.py)."
-)
 
 WEIGHTS_TSV = next((p for p in WEIGHTS_CANDIDATES if p.exists()), None)
 assert WEIGHTS_TSV is not None, (
-    "Missing sampler weights TSV. Looked for:\n"
+    "Missing clsbal sampler weights TSV. Looked for:\n"
     + "\n".join([f"  - {p}" for p in WEIGHTS_CANDIDATES])
     + "\nGenerate with:\n"
-    "  python scripts/data_prep/build_sampler_weights.py --ckpt model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt"
+    "  PYTHONPATH=. python scripts/data_prep/build_clsbal_sampler.py"
 )
 
 print("Weights TSV:", WEIGHTS_TSV)
@@ -68,15 +75,11 @@ from PIL import Image
 from matplotlib.patches import Patch
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
-import torch
-from torch.utils.data import DataLoader
-
-from geoseg.models.ftunetformer import ft_unetformer
-from geoseg.datasets.biodiversity_dataset import BiodiversityTrainDataset, val_aug
-
 mpl.rcParams.update({
+    "text.usetex": True,
     "font.family": "serif",
-    "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+    "font.serif": ["Computer Modern Roman"],
+    "text.latex.preamble": r"\usepackage{lmodern}",
     "mathtext.fontset": "stix",
     "axes.titlesize": 12,
     "axes.labelsize": 11,
@@ -106,20 +109,10 @@ cmap = ListedColormap(colors)
 norm = BoundaryNorm(np.arange(-0.5, 6.5), cmap.N)
 
 # %%
-# Sampler weighting hyperparams (MUST match scripts/data_prep/build_sampler_weights.py defaults)
-EPS = 1e-6
-BETA_TEMPER = 0.5      # (hardness + eps)^beta
-GAMMA_RICH = 1.0       # (richness + eps)^gamma
-
-# Note: final weight also includes clipping/normalisation/mixing; we read that from the TSV.
-
-def _norm_id(x: str) -> str:
-    """Strip _repN suffix so replicas share the same base weight (matches build_sampler_weights.py)."""
-    if "_rep" in x:
-        base, rep = x.rsplit("_rep", 1)
-        if rep.isdigit():
-            return base
-    return x
+# clsbal is FREQUENCY-ONLY (Kang 2020): the per-tile weight is the inverse
+# tile-presence frequency of the rarest minority class it contains (or 1.0 if
+# none). It is read directly from the TSV; there is no hardness/richness
+# decomposition to recompute here (that was the retired A0 sampler).
 
 def load_sampler_weight_map(weights_tsv: Path) -> dict[str, float]:
     m = {}
@@ -136,7 +129,12 @@ w_map = load_sampler_weight_map(WEIGHTS_TSV)
 w_vals = np.array(list(w_map.values()), dtype=np.float32)
 print("Loaded sampler weights:", len(w_vals), "min/med/max:", float(w_vals.min()), float(np.median(w_vals)), float(w_vals.max()))
 
-# pick representative "easy" and "hard" examples from final sampler weights
+# Pick a representative low-weight and high-weight tile from the clsbal weights.
+# clsbal weights are discrete (baseline 1.0 vs the inverse-frequency value of the
+# rarest minority class present), so q=0.10 lands on a no-minority baseline tile
+# and q=0.90 lands on a rarest-minority tile.
+# FLAG (post-run visual review): confirm these two tiles read as a sensible
+# low/high contrast once the final clsbal weights exist.
 q_lo, q_hi = 0.10, 0.90
 w_lo = np.quantile(w_vals, q_lo)
 w_hi = np.quantile(w_vals, q_hi)
@@ -150,8 +148,8 @@ idx_hard = int(np.argmin(np.abs(weights_arr - w_hi)))
 easy_id = keys[idx_easy]
 hard_id = keys[idx_hard]
 
-print("Easy:", easy_id, "final_w:", float(w_map[easy_id]))
-print("Hard:", hard_id, "final_w:", float(w_map[hard_id]))
+print("Low-weight tile:", easy_id, "weight:", float(w_map[easy_id]))
+print("High-weight tile:", hard_id, "weight:", float(w_map[hard_id]))
 
 # %%
 def mask_path_from_id(msk_dir: Path, img_id: str) -> Path:
@@ -169,8 +167,8 @@ hard_mask_path = mask_path_from_id(MSK_DIR, hard_id)
 easy_mask = np.array(Image.open(easy_mask_path))
 hard_mask = np.array(Image.open(hard_mask_path))
 
-print("Easy mask:", easy_mask_path.name, easy_mask.shape, easy_mask.dtype)
-print("Hard mask:", hard_mask_path.name, hard_mask.shape, hard_mask.dtype)
+print("Low-weight mask:", easy_mask_path.name, easy_mask.shape, easy_mask.dtype)
+print("High-weight mask:", hard_mask_path.name, hard_mask.shape, hard_mask.dtype)
 
 # %%
 def add_panel_label_above_center(ax, label, fontsize=32):
@@ -193,106 +191,52 @@ def add_weights_text(ax, text, fontsize=26):
     )
 
 # %%
-def load_student_from_lightning_ckpt(net: torch.nn.Module, ckpt_path: Path) -> torch.nn.Module:
-    ckpt = torch.load(str(ckpt_path), map_location="cpu")
-    if "state_dict" not in ckpt:
-        raise ValueError(f"Invalid Lightning checkpoint: {ckpt_path}")
-    sd = ckpt["state_dict"]
-    net_sd = {k.replace("net.", "", 1): v for k, v in sd.items() if k.startswith("net.")}
-    if not net_sd:
-        net_sd = {k.replace("model.", "", 1): v for k, v in sd.items() if k.startswith("model.")}
-    if not net_sd:
-        raise ValueError("Could not locate model weights in checkpoint")
-    net.load_state_dict(net_sd, strict=False)
-    return net
+def minority_classes_present(mask_np: np.ndarray) -> list[int]:
+    # minority = Settlement(4) or Semi-natural(5); clsbal keys a tile's weight on
+    # the rarest minority class present (any-pixel presence).
+    return [c for c in (4, 5) if bool((mask_np == c).any())]
 
-@torch.no_grad()
-def compute_hardness_error_fraction(img_id: str, data_root: Path, ckpt_path: Path, device: str = "cuda") -> float:
-    """
-    Hardness proxy used by build_sampler_weights.py:
-      err = mean(pred != gt) over pixels.
-    We compute it for the single tile (val_aug).
-    """
-    ds = BiodiversityTrainDataset(data_root=str(data_root), transform=val_aug)
-
-    # Find index by base id (keys are base tile ids)
-    target_idx = None
-    for i, rid in enumerate(ds.img_ids):
-        if _norm_id(rid) == img_id:
-            target_idx = i
-            break
-    if target_idx is None:
-        raise FileNotFoundError(f"Could not locate {img_id} in dataset ids under {data_root}")
-
-    sample = ds[target_idx]
-    img = sample["img"].unsqueeze(0)
-    gt = sample["gt_semantic_seg"].unsqueeze(0)
-
-    net = ft_unetformer(pretrained=False, weight_path=None, num_classes=6, decoder_channels=256)
-    net = load_student_from_lightning_ckpt(net, ckpt_path)
-    net.eval()
-
-    dev = torch.device(device if (device == "cuda" and torch.cuda.is_available()) else "cpu")
-    net.to(dev)
-    img = img.to(dev)
-    gt = gt.to(dev)
-
-    pred = torch.argmax(net(img), dim=1)
-    err = (pred != gt).float().mean().item()
-    return float(err)
-
-def compute_minority_richness_fraction(mask_np: np.ndarray) -> float:
-    # minority = Settlement(4) or SemiNatural(5)
-    m = (mask_np == 4) | (mask_np == 5)
-    # exclude ignore index (0) from denom? build_sampler_weights.py uses mean over all pixels, incl bg
-    # so we match it exactly: mean over full tile.
-    return float(m.mean())
-
-def component_weights_from_h_r(h: float, r: float) -> tuple[float, float]:
-    hard_w = (h + EPS) ** BETA_TEMPER
-    min_w = (r + EPS) ** GAMMA_RICH
-    return float(hard_w), float(min_w)
+def minority_label(mask_np: np.ndarray) -> str:
+    present = minority_classes_present(mask_np)
+    if not present:
+        return "no minority"
+    # CLASS_NAMES index 4 = Settlement, 5 = Semi-nat.
+    return ", ".join(CLASS_NAMES[c] for c in present)
 
 # %%
-# Compute components for the two shown tiles
-easy_h = compute_hardness_error_fraction(easy_id, SPLIT_ROOT, STAGE2B_CKPT)
-hard_h = compute_hardness_error_fraction(hard_id, SPLIT_ROOT, STAGE2B_CKPT)
-
-easy_r = compute_minority_richness_fraction(easy_mask)
-hard_r = compute_minority_richness_fraction(hard_mask)
-
-easy_hw, easy_mw = component_weights_from_h_r(easy_h, easy_r)
-hard_hw, hard_mw = component_weights_from_h_r(hard_h, hard_r)
-
+# clsbal is frequency-only: the per-tile weight is read straight from the TSV.
 easy_final = float(w_map[easy_id])
 hard_final = float(w_map[hard_id])
 
-print(f"Easy components: h={easy_h:.4f}, r={easy_r:.4f}, hard_w={easy_hw:.4f}, min_w={easy_mw:.4f}, final={easy_final:.4f}")
-print(f"Hard components: h={hard_h:.4f}, r={hard_r:.4f}, hard_w={hard_hw:.4f}, min_w={hard_mw:.4f}, final={hard_final:.4f}")
+easy_minority = minority_label(easy_mask)
+hard_minority = minority_label(hard_mask)
+
+print(f"Low-weight tile:  minority={easy_minority}, weight={easy_final:.2f}")
+print(f"High-weight tile: minority={hard_minority}, weight={hard_final:.2f}")
 
 # %%
-def plot_figure06_hard_x_minority_sampling(
+def plot_figure07_clsbal_sampling(
     easy_mask, hard_mask,
-    easy_hw, easy_mw, easy_final,
-    hard_hw, hard_mw, hard_final,
+    easy_minority, easy_final,
+    hard_minority, hard_final,
     out_pdf: Path
 ):
     fig = plt.figure(figsize=(8*3, 4.2*3), dpi=300)
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.18], hspace=0.15, wspace=-0.15)
 
-    # (a) easy
+    # (a) low-weight tile
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.imshow(easy_mask, cmap=cmap, norm=norm, interpolation="nearest")
     ax1.set_axis_off()
     add_panel_label_above_center(ax1, "(a)")
-    add_weights_text(ax1, f"hard={easy_hw:.2f}, minority={easy_mw:.2f}, final={easy_final:.2f}", fontsize=28)
+    add_weights_text(ax1, f"{easy_minority}, weight={easy_final:.2f}", fontsize=28)
 
-    # (b) hard
+    # (b) high-weight tile
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.imshow(hard_mask, cmap=cmap, norm=norm, interpolation="nearest")
     ax2.set_axis_off()
     add_panel_label_above_center(ax2, "(b)")
-    add_weights_text(ax2, f"hard={hard_hw:.2f}, minority={hard_mw:.2f}, final={hard_final:.2f}", fontsize=28)
+    add_weights_text(ax2, f"{hard_minority}, weight={hard_final:.2f}", fontsize=28)
 
     # legend row
     legend_ax = fig.add_subplot(gs[1, :])
@@ -305,9 +249,9 @@ def plot_figure06_hard_x_minority_sampling(
     plt.close(fig)
     print("Saved:", out_pdf)
 
-plot_figure06_hard_x_minority_sampling(
+plot_figure07_clsbal_sampling(
     easy_mask, hard_mask,
-    easy_hw, easy_mw, easy_final,
-    hard_hw, hard_mw, hard_final,
+    easy_minority, easy_final,
+    hard_minority, hard_final,
     OUT_PDF
 )
