@@ -2,8 +2,11 @@
 # ============================================================================
 # Multi-seed campaign driver — ONE resumable command for the whole campaign.
 #
-#   bash run_campaign.sh            # run / resume the full 5-seed campaign
+#   bash run_campaign.sh            # run / resume the full 10-seed campaign
 #   DRYRUN=1 bash run_campaign.sh   # print the exact plan, run nothing
+#
+# This is the LOCAL driver. The definitive 10-seed run is the Sonic array
+# (sonic/10_submit_final_campaign.slurm); use this for local dev / single seeds.
 #
 # You do NOT need to remember which seed or stage you were on. Re-run this after
 # ANY interruption (Ctrl-C, reboot, CUDA crash) and it picks up automatically:
@@ -21,7 +24,7 @@
 # ============================================================================
 set -euo pipefail
 
-SEEDS=(42 43 44 45 46)            # LOCKED campaign seed set
+SEEDS=(42 43 44 45 46 47 48 49 50 51)   # LOCKED 10-seed campaign set
 ROOT_SEED=42                      # the seed that lives in this repo (others = worktrees)
 TEACHER=pretrain_weights/u-efficientnet-b4_s0_CELoss_pretrained.pth
 
