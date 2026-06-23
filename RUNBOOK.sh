@@ -28,13 +28,11 @@ fi
 #   bash RUNBOOK.sh                          # run everything from A0
 #   bash RUNBOOK.sh --from B1                # resume from Stage 1 training onward
 #   bash RUNBOOK.sh --from B1 --to C2        # run a stage WINDOW (Stage 1 .. test eval)
-#   RUN_NULL_CONTROLS=1 bash RUNBOOK.sh      # ALSO run the N3 attribution null control
 #   SEED=1 bash RUNBOOK.sh --from B1         # student lineage at seed 1 (teacher fixed at 42)
 #   RESUME=1 bash RUNBOOK.sh --from B1       # resume training stages from their last.ckpt (no --force)
 #
 # Valid stages: A0 (taxonomy check), A1-A10 (data prep + teacher build),
-#               B1-B5 (student training), N3 (optional null control),
-#               C1-C4 (evaluation), D (analyses), E (figures)
+#               B1-B5 (student training), C1-C4 (evaluation), D (analyses), E (figures)
 #
 # For the full 5-seed campaign as ONE resumable command, use ./run_campaign.sh.
 #
@@ -296,18 +294,10 @@ if run_stage B5; then
     -c config/biodiversity/stage3_clsbal.py $FORCE_TRAIN
 fi
 
-# ============= N. NULL CONTROLS (optional; export RUN_NULL_CONTROLS=1) ===============
-# Off by default. Attribution control differing from its parent stage in EXACTLY one
-# component, isolating the named mechanism from the +45-epoch / draw-count effect:
-#   N3 = Stage 2b continued WITH uniform draws (no weighting)  ->  Stage3 - N3 = the sampler's effect
-# Runs the same 45 epochs and 2646 draws/epoch as its parent, and is evaluated automatically by C1.
-
-if run_stage N3 && [ "${RUN_NULL_CONTROLS:-0}" = "1" ]; then
-  require_file model_weights/biodiversity/stage2b_oem_finetune/stage2b_oem_finetune.ckpt B3
-  echo "[N3] Null control: Stage 2b continued WITHOUT the hard x minority weighting (uniform draws)"
-  PYTHONPATH=. python -m train.train_supervision \
-    -c config/biodiversity/stage3null_nosampler.py $FORCE_TRAIN
-fi
+# (Former N3 sampler null control removed — the 2x2 factorial estimates the sampler effect
+#  directly via the paired (sampler-only - baseline) / (full - transfer-only) contrasts, so the
+#  separate uniform-draw null is redundant. The retired A0-era config is archived under
+#  config/biodiversity/_archive/stage3null_nosampler.py.)
 
 # ======================== C. EVALUATION ==============================
 
@@ -378,7 +368,7 @@ if run_stage D; then
   echo "[D] Running supplementary analyses (A1-A6)"
   PYTHONPATH=. python scripts/analysis/a1_minority_recall.py
   PYTHONPATH=. python scripts/analysis/a2_symmetric_confusion.py
-  PYTHONPATH=. python scripts/analysis/a3_stage4_weight_uplift.py
+  PYTHONPATH=. python scripts/analysis/a3_sampler_weight_uplift.py
   PYTHONPATH=. python scripts/analysis/a4_val_test_gap.py
   PYTHONPATH=. python scripts/analysis/a5_majority_stability.py
   PYTHONPATH=. python scripts/analysis/a6_weight_gini.py

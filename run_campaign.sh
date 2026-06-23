@@ -74,7 +74,7 @@ for SEED in "${SEEDS[@]}"; do
 
   # The resumable per-seed run: Stage 1 .. test eval (qualitative figures/analyses
   # are a separate once-off post-campaign step, not run per seed).
-  run bash -c "cd '$DIR' && RESUME=1 SEED=$SEED HF_HUB_OFFLINE=1 RUN_NULL_CONTROLS=1 \
+  run bash -c "cd '$DIR' && RESUME=1 SEED=$SEED HF_HUB_OFFLINE=1 \
       bash RUNBOOK.sh --from B1 --to C2"
 
   run touch "$DONE"

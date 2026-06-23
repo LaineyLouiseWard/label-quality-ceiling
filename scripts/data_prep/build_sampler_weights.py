@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """
+RETIRED (A0 sampler builder) — the shipped pipeline uses `build_clsbal_sampler.py`; kept for
+reference, NOT part of the current 2x2 factorial pipeline.
+
 Build the hard x minority sampler weights for the Biodiversity train split.
 
 Outputs:

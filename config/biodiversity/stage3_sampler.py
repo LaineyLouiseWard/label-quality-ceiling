@@ -1,4 +1,7 @@
 """
+RETIRED (A0) — superseded by the clsbal class-balanced sampler (`stage3_clsbal.py`); kept for
+reference, NOT part of the current 2x2 factorial pipeline. Original docstring follows.
+
 Stage 3 (hard x minority sampling): the single imbalance-mitigation mechanism.
 
 A WeightedRandomSampler (replacement=True) over the Biodiversity `train` split, with per-tile

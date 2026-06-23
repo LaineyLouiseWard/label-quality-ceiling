@@ -43,12 +43,6 @@ To resume from a specific stage:
 bash RUNBOOK.sh --from B1   # resume from Stage 1 training onward
 ```
 
-Optional attribution null controls (off by default):
-
-```bash
-RUN_NULL_CONTROLS=1 bash RUNBOOK.sh
-```
-
 Run the student lineage at a different seed (the teacher stays fixed at seed 42):
 
 ```bash
@@ -56,7 +50,7 @@ SEED=1 bash RUNBOOK.sh --from B1
 ```
 
 Valid stages: `A0` (taxonomy check), `A1`–`A10` (data prep + teacher build), `B1`–`B5` (student
-training), `N3` (optional null control), `C1`–`C4` (evaluation), `D` (analyses), `E` (figures).
+training), `C1`–`C4` (evaluation), `D` (analyses), `E` (figures).
 
 **Warning:** This overwrites all derived outputs in-place — checkpoints, sampler weights, evaluation
 results, and figures. Raw data (`data/biodiversity_raw/`, `data/openearthmap_raw/`) is never modified.
@@ -198,9 +192,6 @@ PYTHONPATH=. python -m train.train_supervision -c config/biodiversity/stage3_cls
 **Data:** `data/biodiversity_split/train/` · **Requires:** Stage 2b ckpt (warm start), `sampler_weights_clsbal.tsv`
 **Output:** `model_weights/biodiversity/stage3_clsbal/` (deployed final model)
 
-### N3 — Attribution null control (optional)
-`RUN_NULL_CONTROLS=1`. N3 = Stage 2b + uniform draws (no weighting) → `Stage3 − N3` = sampler effect.
-
 ---
 
 ## C. Evaluation
@@ -251,7 +242,7 @@ All analyses are derived from saved evaluation outputs and `artifacts/sampler_we
 ```bash
 PYTHONPATH=. python scripts/analysis/a1_minority_recall.py
 PYTHONPATH=. python scripts/analysis/a2_symmetric_confusion.py
-PYTHONPATH=. python scripts/analysis/a3_stage4_weight_uplift.py
+PYTHONPATH=. python scripts/analysis/a3_sampler_weight_uplift.py
 PYTHONPATH=. python scripts/analysis/a4_val_test_gap.py
 PYTHONPATH=. python scripts/analysis/a5_majority_stability.py
 PYTHONPATH=. python scripts/analysis/a6_weight_gini.py

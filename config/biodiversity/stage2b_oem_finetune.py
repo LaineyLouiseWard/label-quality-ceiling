@@ -4,7 +4,8 @@ Stage 2b (OEM transfer, fine-tune): OEM->Biodiversity finetune on the Biodiversi
 Second half of the Stage 2 OEM-transfer step. Initialises from the Stage 2a OEM pre-train
 checkpoint (stage2a_oem_pretrain) and fine-tunes on Biodiversity `train` at native class
 frequency (no static minority duplication anywhere in the pipeline). The single imbalance
-mechanism — the hard x minority sampler — is introduced at Stage 3, on top of this checkpoint.
+mechanism — the clsbal class-balanced sampler (Kang 2020) — is introduced in the sampler cells
+(stage3_clsbal / stage_sampler_only), on top of this checkpoint.
 
 Decoupling rationale (normal sampling here, rebalance later):
 - Kang et al. 2020 (Decoupling) and Zhou et al. 2020 (BBN) show instance-balanced (normal) sampling
@@ -117,7 +118,7 @@ test_dataset = BiodiversityTestDataset(
 
 
 # -------------------
-# Loaders (vanilla shuffle; sampling comes in Stage 4) -- IDENTICAL
+# Loaders (vanilla shuffle; the clsbal sampler is applied only in the sampler cells) -- IDENTICAL
 # -------------------
 train_loader = DataLoader(
     dataset=train_dataset,

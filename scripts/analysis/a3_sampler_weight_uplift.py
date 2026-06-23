@@ -6,7 +6,7 @@ computes mean weight per group, and reports uplift ratios for the shipped
 Stage-3 class-balanced (clsbal) frequency-only sampler.
 
 Run:
-  python scripts/analysis/a3_stage4_weight_uplift.py
+  python scripts/analysis/a3_sampler_weight_uplift.py
 """
 
 from __future__ import annotations

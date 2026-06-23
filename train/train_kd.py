@@ -1,4 +1,8 @@
 """
+RETIRED — knowledge distillation was DROPPED (rigorous negative result; see
+docs/SELFDISTIL_VERDICT_2026-06-22.md). Kept for the Discussion's negative result + reproducibility,
+NOT part of the current 2x2 factorial pipeline.
+
 Knowledge Distillation (KD) training script (Stage 5).
 
 Trains a student segmentation model using:

@@ -1,4 +1,4 @@
-"""Self/ensemble-distillation loss for Stage 4 (in-domain ensemble teacher).
+"""Self/ensemble-distillation loss (RETIRED — self-distillation DROPPED, see docs/SELFDISTIL_VERDICT_2026-06-22.md; kept for reference, not in the current factorial pipeline). In-domain ensemble teacher.
 
 Pairs with `geoseg.models.ensemble_teacher.EnsembleTeacher`. Unlike the cross-taxonomy
 OEM-KD path (`kd_utils.KDHelper`, which remaps 9->6 via a mapping matrix), here the teacher

@@ -264,12 +264,12 @@ def main() -> None:
     print_counts_row(combined_val)
     print_counts_row(combined_test)
 
-    print_block("F) Stage-wise pools (paper-facing; 4-stage, no replication)")
-    print(f"{'Stage 1':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles")
-    print(f"{'Stage 2a':<12} Combined pretrain train pool:     {fmt(combined_train.paired)} paired tiles (Biodiversity + OEM)")
-    print(f"{'Stage 2b':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (OEM-transfer finetune)")
-    print(f"{'Stage 3':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (hard x minority sampler)")
-    print(f"{'Stage 4':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (sampler + teacher KD)")
+    print_block("F) Factorial cell pools (paper-facing; 2x2 = OEM transfer x clsbal sampler, no replication)")
+    print(f"{'Pretrain':<12} Combined pretrain train pool:     {fmt(combined_train.paired)} paired tiles (Biodiversity + OEM; feeds the transfer cells)")
+    print(f"{'baseline':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (scratch; no transfer, no sampler)")
+    print(f"{'transfer':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (from pretrain; no sampler)")
+    print(f"{'sampler':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (scratch + clsbal sampler)")
+    print(f"{'full':<12} Biodiversity train pool:          {fmt(biodiv_train.paired)} paired tiles (from pretrain + clsbal sampler; shipped)")
     print(f"{'Eval':<12} Biodiversity val/test pools:      {fmt(biodiv_val.paired)} / {fmt(biodiv_test.paired)} paired tiles")
 
     if args.out_json:
