@@ -743,7 +743,10 @@ class GlobalLocalAttention(nn.Module):
     def pad(self, x, ps):
         _, _, H, W = x.size()
         if W % ps != 0:
-            x = F.pad(x, (0, ps - W % ps), mode='reflect')
+            # 4-element pad (l, r, t, b): width-right only. The 2-element form (0, pad)
+            # is rejected by torch reflect-pad on 4D tensors; this only fires for non-
+            # window-aligned inputs (e.g. multi-scale TTA) — aligned inputs skip it.
+            x = F.pad(x, (0, ps - W % ps, 0, 0), mode='reflect')
         if H % ps != 0:
             x = F.pad(x, (0, 0, 0, ps - H % ps), mode='reflect')
         return x
