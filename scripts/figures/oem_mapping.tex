@@ -1,4 +1,4 @@
-% Figure_mapping.tex — grounded OpenEarthMap(OEM) <-> Biodiversity mapping SCHEMATIC.
+% oem_mapping.tex — grounded OpenEarthMap(OEM) <-> Biodiversity mapping SCHEMATIC.
 %
 % The picture form of Table 1. Two panels + a shared legend:
 %   Panel A — hard argmax (Sankey): each OEM class -> its argmax Biodiversity class, arrow
@@ -7,7 +7,7 @@
 %             Water -> Grassland, Agriculture -> Grassland) are drawn with a thick black
 %             outline and a grey-italic "was -> ..." annotation. Teacher-pixel-share badges
 %             on the OEM chips with >3% share.
-%   Panel B — soft KD transition matrix (9x6 heatmap): every cell prints P(GT student | teacher
+%   Panel B — soft teacher distribution (9x6 heatmap): every cell prints P(GT student | teacher
 %             OEM) x100, background = target student colour scaled by value; the per-row argmax
 %             cell is bold-bordered to tie B back to A; cells <1% are blanked grey.
 %
@@ -24,7 +24,7 @@
 % mask — do not reuse this rendering anywhere a real mask is drawn.
 %
 % House style (Sec 2.7): standalone + [T1]fontenc + tikz; >=Stealth; Computer Modern (no Times).
-% Compile:  cd scripts/figures && pdflatex -interaction=nonstopmode -halt-on-error Figure_mapping.tex
+% Compile:  cd scripts/figures && pdflatex -interaction=nonstopmode -halt-on-error oem_mapping.tex
 \documentclass[border=6pt]{standalone}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
@@ -40,7 +40,7 @@
 \definecolor{cSettle}{RGB}{59,141,247}
 \definecolor{cSemi}{RGB}{255,214,33}
 
-% ── OEM 8-class palette (+ Unknown black) — Figure04.py OEM8_HEX ──
+% ── OEM 8-class palette (+ Unknown black) — oem_harmonisation.py OEM8_HEX ──
 \definecolor{oUnknown}{HTML}{000000}
 \definecolor{oBare}{HTML}{800000}
 \definecolor{oRange}{HTML}{00FF24}
@@ -116,12 +116,9 @@
 \node[badge, anchor=east] at ([xshift=-4pt]oem6.west) {3.6\%};
 \node[badge, anchor=east, font=\scriptsize\bfseries] at ([xshift=-4pt]oem7.west) {66.8\%};
 
-% --- "was -> ..." grey-italic annotations for the 3 changed rows, to the LEFT of the chip.
-%     Bareland has no share badge (keep close); Water/Agriculture also carry a badge, so push
-%     their annotation further left to clear it. ---
-\node[ann, anchor=east] at ([xshift=-3pt]oem1.west) {was $\rightarrow$ Background};
-\node[ann, anchor=east] at ([xshift=-1.05cm]oem6.west) {was $\rightarrow$ Background};
-\node[ann, anchor=east] at ([xshift=-1.05cm]oem7.west) {was $\rightarrow$ Cropland};
+% The three rows whose grounded target differs from naive name-based matching (Bareland,
+% Water, Agriculture) are marked by the thick black arrow outline below; the cryptic
+% "was -> ..." left-margin annotations were removed (the bold arrow + key carry this).
 
 % Student chips (right column). Wider horizontal channel (x=9.2) keeps the curves shallow.
 % white-text: Background, Forest, Settlement. black-text: Grassland, Cropland, Seminatural.
@@ -180,7 +177,7 @@
 \node[font=\footnotesize\bfseries, anchor=south] at ([yshift=1pt]st0.north) {Biodiversity};
 
 % =====================================================================
-% PANEL B — soft KD transition matrix (9x6 value-scaled heatmap)
+% PANEL B — soft teacher distribution (9x6 value-scaled heatmap)
 % =====================================================================
 % Anchor Panel B below Panel A.
 \def\bx{0.0}            % left edge x of matrix body
@@ -257,36 +254,17 @@
   \node[cellarg] at (\acx,\ry) {};
 }
 
-% Panel-B title
+% Panel-B title. (Reworded: "Soft KD targets" was stale — knowledge distillation is dropped
+% from the pipeline. The soft matrix now stands purely as the grounding evidence behind the
+% hard argmax routing in (a): the full teacher distribution over Biodiversity classes.)
 \node[hdr, anchor=south] at ({\bx+2.5*\cw},{\by+\ch+0.55})
-  {(b) Soft KD targets: $P(\text{GT} \mid \text{teacher OEM}) \times 100$};
+  {(b) Soft teacher distribution: $P(\text{Biodiversity} \mid \text{teacher OEM}) \times 100$};
 
 % =====================================================================
-% SHARED LEGEND
+% No in-figure legend or key: every class is already a named, colour-filled chip in both
+% panels, and the encoding (arrow/cell colour = target class; bold outline = differs from
+% name-based matching; left badges = teacher-pixel share) belongs in the manuscript caption.
 % =====================================================================
-\def\lgy{-16.4}
-\node[font=\footnotesize\bfseries, anchor=west] at (\bx,\lgy) {Biodiversity classes:};
-\foreach \k/\nm/\col/\edge in {%
-  0/Background/cBack/1,
-  1/{Forest land}/cForest/0,
-  2/Grassland/cGrass/0,
-  3/Cropland/cCrop/0,
-  4/Settlement/cSettle/0,
-  5/{Semi-nat.}/cSemi/0%
-}{
-  \pgfmathsetmacro{\lx}{\bx + 3.9 + \k*1.78}
-  \ifnum\edge=1
-    \fill[\col, draw=black, line width=0.5pt] (\lx,{\lgy-0.13}) rectangle ++(0.34,0.30);
-  \else
-    \fill[\col] (\lx,{\lgy-0.13}) rectangle ++(0.34,0.30);
-  \fi
-  \node[anchor=west, font=\scriptsize] at ({\lx+0.42},\lgy) {\nm};
-}
-\node[ann, anchor=north west, text width=15cm] at (\bx,{\lgy-0.45})
-  {Arrow/cell colour $=$ target Biodiversity class. \textbf{Bold} outline $=$ row changed from the
-   original name-based map (Agriculture, Water $\rightarrow$ Grassland; Bareland $\rightarrow$
-   Semi-nat.). Badges on (a) give each OEM class's share of teacher pixels; values from the frozen
-   EfficientNet-B4 U-Net teacher confusion.};
 
 \end{tikzpicture}
 \end{document}

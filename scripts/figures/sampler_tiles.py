@@ -16,10 +16,10 @@ tile" vs "rarest-minority tile" rather than a continuous easy/hard spread. Confi
 the two selected example tiles read sensibly once the final clsbal weights exist.
 
 Writes:
-  figures/Figure07.pdf
+  figures/sampler_tiles.pdf
 
 Run:
-  python scripts/figures/Figure07.py
+  python scripts/figures/sampler_tiles.py
 """
 
 import sys
@@ -49,7 +49,7 @@ WEIGHTS_CANDIDATES = [
 
 OUT_DIR = repo_root / "figures"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-OUT_PDF = OUT_DIR / "Figure07.pdf"
+OUT_PDF = OUT_DIR / "sampler_tiles.pdf"
 
 print("Repo root:", repo_root)
 print("Masks dir:", MSK_DIR)

@@ -3,12 +3,18 @@
 % corrected C3 placement-evidence matrix (docs/C3_placement_matrix.md, Stage A sign-off):
 %   x = pixel-level loss signal (algorithm-level); y = spatial-level exposure (data-level).
 % Qualitative scale None=1, Low=3.5, Med=6, High=8.5; half-steps at 2.25 / 4.75 / 7.25.
-% Shaded zones group the clusters; their edges sit at the midpoints between adjacent
-% clusters' ratings: loss/both-axes split at y=Med(6.0) [KD Low-Med vs hard x minority
-% Med-High]; exposure/both-axes split at x~6.7 [copy-paste Med vs hard x minority Med-High].
+% Shaded zones group the clusters into an exposure wall (top-left), a loss wall
+% (bottom-right), and the sparse both-axes region (top-right) that established methods
+% largely leave empty.
 % Labels are offset for legibility and linked to their marker by a leader line, so marker
 % position always equals the rated level. Encoding: marker fill = internal curation (teal)
-% vs external supervision (orange); black ring = used in this study.
+% vs external supervision (orange); black ring = a lever studied in this work.
+% Black rings sit on the TWO levers evaluated in the 2x2 factorial: cross-dataset transfer
+% (OpenEarthMap, orange/external) and the class-balanced clsbal sampler (teal/internal,
+% a pure exposure-side data-level intervention). Knowledge distillation remains an
+% un-ringed established landscape method; the bespoke hard x minority sampler is retired
+% and dropped (it was our own composite, not an established family, so it carries no
+% standing once un-ringed).
 \documentclass[border=6pt]{standalone}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
@@ -42,6 +48,8 @@
   {exposure-axis methods};
 \node[teal!65!black, anchor=north west, align=center, font=\small\itshape] at (6.95,5.7)
   {loss-axis methods};
+\node[black!45, align=center, font=\small\itshape] at (9.55,8.3)
+  {few established methods\\combine high loss signal\\with high exposure};
 
 % ---- axes ----
 \draw[->, line width=0.9pt] (0,0) -- (\xmax,0);
@@ -73,7 +81,7 @@
 \draw[lead] (1.5,9.2)   -- (3.25,8.5);   % tile-level
 \draw[lead] (3.7,9.3)   -- (3.75,8.5);   % replication
 \draw[lead] (5.7,9.5)   -- (6.0,8.5);    % copy-paste
-\draw[lead] (9.0,8.2)   -- (7.25,7.25);  % hard x minority
+\draw[lead] (1.5,7.55)  -- (1.5,8.5);    % clsbal sampler (ours)
 \draw[lead] (10.1,4.6)  -- (8.5,4.75);   % kd
 
 % ============================================================
@@ -88,11 +96,11 @@
 \node[mkint] at (3.5,6.0) {};    % smote      (Low / Med)
 \node[mkint] at (3.25,8.5) {};   % tile-level (Low / High)
 \node[mkint] at (6.0,8.5) {};    % copy-paste (Med / High)
-% used in this study (black ring)
-\node[mkextours] at (3.5,7.25) {};  % pre-training (Low / Med-High)
+% levers studied in this work (black ring)
+\node[mkextours] at (3.5,7.25) {};  % cross-dataset transfer (Low / Med-High) -- ringed lever
+\node[mkintours] at (1.5,8.5) {};   % clsbal sampler (None-Low / High) -- ringed lever, pure exposure
 \node[mkint] at (3.75,8.5) {};  % replication  (Low / High) -- demoted: known internal-curation method, not used in this study
-\node[mkintours] at (7.25,7.25) {}; % hard x minority (Med-High / Med-High)
-\node[mkextours] at (8.5,4.75) {};  % kd (High / Low-Med)
+\node[mkext] at (8.5,4.75) {};  % kd (High / Low-Med) -- un-ringed established landscape method
 
 % ============================================================
 % LABELS (opaque, sitting on the tinted zones)
@@ -106,7 +114,7 @@
 \node[lbl] at (1.5,9.2)   {Tile-level\\resampling};
 \node[lbl] at (3.7,9.3)   {Minority-aware\\replication};
 \node[lbl] at (5.7,9.5)   {Copy-paste /\\instance\\augmentation};
-\node[lbl] at (9.0,8.2)   {Hard $\times$ minority\\sampling};
+\node[lbl] at (1.5,7.55)  {Class-balanced\\sampler (clsbal)};
 \node[lbl] at (10.1,4.6)  {Knowledge\\distillation};
 
 % ============================================================
@@ -118,7 +126,7 @@
   \node[mkext] (lg2) at (0.6,-0.72) {};
   \node[right=6pt of lg2, font=\small] {External supervision (imports outside data/signal)};
   \node[mkintours] (lg3) at (0.6,-1.44) {};
-  \node[right=6pt of lg3, font=\small] {Black ring = used in this study};
+  \node[right=6pt of lg3, font=\small] {Black ring = lever studied in this work};
 \end{scope}
 
 \end{tikzpicture}

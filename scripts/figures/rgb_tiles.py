@@ -10,10 +10,10 @@ Requested changes:
 5) MDPI-safe export: >=1100 px width and 300 dpi.
 
 Writes:
-  figures/Figure03.pdf
+  figures/rgb_tiles.pdf
 
 Run:
-  python scripts/figures/Figure03.py
+  python scripts/figures/rgb_tiles.py
 """
 
 from pathlib import Path
@@ -233,7 +233,7 @@ def main():
 
     fig.subplots_adjust(left=0.04, right=0.96, top=0.95, bottom=0.10)
 
-    out = repo / "figures/Figure03.pdf"
+    out = repo / "figures/rgb_tiles.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
 
     # Ensure PDF is written with 300 dpi for raster elements

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-_gen_mapping_values.py — reproducible value source for Figure_mapping.tex.
+_gen_mapping_values.py — reproducible value source for oem_mapping.tex.
 
 Loads the frozen teacher confusion (artifacts/teacher_oem_gt_confusion.npz) and prints the
 three quantities the OEM<->Bio mapping schematic embeds, so the .tex numbers are NEVER

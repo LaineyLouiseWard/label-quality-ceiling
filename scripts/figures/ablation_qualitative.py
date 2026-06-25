@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """
-scripts/figures/Figure08.py
+scripts/figures/ablation_qualitative.py
 
-Qualitative ablation comparison on FOUR tiles, shown as 4 columns.
+Qualitative comparison across the 2x2 FACTORIAL CELLS on FOUR tiles (4 columns).
 
-Layout (5 rows x 4 columns):
-  Rows:    Satellite image, GT, Stage 1, Stage 2, Stage 3
-  Columns: (a)–(d) = four chosen tile IDs
+Layout (6 rows x 4 columns):
+  Rows:    Satellite image, Ground truth, Baseline, Transfer-only, Sampler-only, Full
+  Columns: (a)-(d) = four chosen validation tile IDs
 
-Shows RAW predictions (no extra AOI masking beyond GT==0 invalid masking used for display).
-Writes:
-  figures/Figure08.pdf
+Predictions are the argmax of the median-seed (seed 44) ensemble-member softmax dumped for
+each factorial cell by scripts/analysis/dump_seed_softmax.py (single forward pass, no TTA,
+matching the ablation convention). Using the dumped softmax keeps all four cells on the SAME
+seed (44, the median used for the paper figures) and needs no checkpoints.
+
+Cells -> softmax folders (under <softmax-root>/seed<seed>/analysis/seed_softmax/<cell>/seed<seed>/):
+  Baseline      -> stage1_baseline
+  Transfer-only -> stage2b_oem_finetune
+  Sampler-only  -> stage_sampler_only
+  Full          -> stage3_clsbal
+
+Writes: figures/ablation_qualitative.pdf
 """
 
 from __future__ import annotations
@@ -43,7 +52,18 @@ from geoseg.datasets.biodiversity_dataset import (
     CLASSES,
     PALETTE as DATASET_PALETTE,
 )
-from geoseg.models.ftunetformer import ft_unetformer
+
+
+# -----------------------------------------------------------------------------
+# Factorial cells (row key -> softmax folder name). Order = the figure's row order.
+# -----------------------------------------------------------------------------
+CELLS: List[Tuple[str, str]] = [
+    ("baseline", "stage1_baseline"),
+    ("transfer", "stage2b_oem_finetune"),
+    ("sampler", "stage_sampler_only"),
+    ("full", "stage3_clsbal"),
+]
+ROW_KEYS = ["img", "gt"] + [k for k, _ in CELLS]
 
 
 # -----------------------------------------------------------------------------
@@ -72,49 +92,28 @@ def set_plot_style() -> None:
 # Classes & palette (canonical from dataset)
 # -----------------------------------------------------------------------------
 CLASS_NAMES: Dict[int, str] = {i: n for i, n in enumerate(CLASSES)}
-# display tweak only:
 if 5 in CLASS_NAMES:
     CLASS_NAMES[5] = "Semi-nat."
 
 PALETTE: Dict[int, Tuple[int, int, int]] = {i: tuple(rgb) for i, rgb in enumerate(DATASET_PALETTE)}
 
-# Albumentations Normalize() defaults (used by dataset)
+# Albumentations Normalize() defaults (used by dataset) for denormalising the display RGB
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 
 # -----------------------------------------------------------------------------
-# Highlight annotations drawn on specific (column, row) panels
+# Highlight annotations drawn on the GT and every prediction-cell panel of a column,
+# marking the same region down the column so the feature's evolution across cells is
+# trackable (settlement consolidating, semi-natural recovering, roads remaining thin).
+# Referenced by the manuscript caption: cyan = settlement cluster (b), purple =
+# semi-natural region (d), white = thin road features (c).
 # -----------------------------------------------------------------------------
-# Each entry: col index (0-based), row keys to annotate, rect (x, y, w, h)
-# in 512×512 pixel coords, edge colour, and linewidth.
-# Each rectangle is drawn on the ground truth and every stage row of its column,
-# marking the same image region all the way down so the feature's evolution across
-# stages is trackable (settlement consolidating, semi-natural recovering, roads
-# remaining fragmented).
-ANNOTATED_ROWS = {"gt", "s1", "s2", "s3"}
+ANNOTATED_ROWS = {"gt"} | {k for k, _ in CELLS}
 HIGHLIGHT_ANNOTATIONS = [
-    {  # H1: Compact settlement cluster — tile (b)
-        "col": 1,
-        "rows": ANNOTATED_ROWS,
-        "rect": (100, 40, 300, 260),
-        "color": "#00FFFF",   # cyan
-        "lw": 6.0,
-    },
-    {  # H2: Large semi-natural region — tile (d)
-        "col": 3,
-        "rows": ANNOTATED_ROWS,
-        "rect": (140, 40, 320, 340),
-        "color": "#7B2FBE",   # purple
-        "lw": 6.0,
-    },
-    {  # H3: Thin linear road/settlement features — tile (c)
-        "col": 2,
-        "rows": ANNOTATED_ROWS,
-        "rect": (20, 120, 380, 200),
-        "color": "#FFFFFF",   # white
-        "lw": 6.0,
-    },
+    {"col": 1, "rows": ANNOTATED_ROWS, "rect": (100, 40, 300, 260), "color": "#00FFFF", "lw": 6.0},
+    {"col": 3, "rows": ANNOTATED_ROWS, "rect": (140, 40, 320, 340), "color": "#7B2FBE", "lw": 6.0},
+    {"col": 2, "rows": ANNOTATED_ROWS, "rect": (20, 120, 380, 200), "color": "#FFFFFF", "lw": 6.0},
 ]
 
 
@@ -130,46 +129,13 @@ def find_repo_root() -> Path:
     raise RuntimeError("Could not find repo root. Run from inside the repo.")
 
 
-def resolve_ckpt(path_like: str) -> Path:
-    p = Path(path_like).expanduser().resolve()
-    if p.is_file():
-        if p.suffix != ".ckpt":
-            raise ValueError(f"Expected a .ckpt file, got: {p}")
-        return p
-
-    if not p.is_dir():
-        raise FileNotFoundError(f"Checkpoint path not found: {p}")
-
-    ckpts = list(p.rglob("*.ckpt"))
-    if not ckpts:
-        raise FileNotFoundError(f"No checkpoints found under: {p}")
-
-    ckpts.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-    return ckpts[0]
-
-
-def load_net_from_lightning_ckpt(net: torch.nn.Module, ckpt_path: Path) -> torch.nn.Module:
-    ckpt = torch.load(str(ckpt_path), map_location="cpu")
-    sd = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
-
-    cleaned = {}
-    for k, v in sd.items():
-        if k.startswith("net."):
-            cleaned[k.replace("net.", "", 1)] = v
-        elif k.startswith("model."):
-            cleaned[k.replace("model.", "", 1)] = v
-        else:
-            cleaned[k] = v
-
-    net.load_state_dict(cleaned, strict=False)
-    return net
-
-
-@torch.no_grad()
-def predict_mask(net: torch.nn.Module, img_t: torch.Tensor, device: torch.device) -> np.ndarray:
-    net.eval()
-    logits = net(img_t.unsqueeze(0).to(device))
-    return torch.argmax(logits, dim=1)[0].detach().cpu().numpy().astype(np.uint8)
+def softmax_pred(softmax_root: Path, cell: str, seed: int, img_id: str) -> np.ndarray:
+    """argmax of the seed's dumped per-pixel softmax for one cell/tile -> class-id mask."""
+    p = softmax_root / f"seed{seed}" / "analysis" / "seed_softmax" / cell / f"seed{seed}" / f"{img_id}.npy"
+    if not p.is_file():
+        raise FileNotFoundError(f"softmax not found: {p}")
+    sm = np.load(p).astype(np.float32)          # (6, H, W)
+    return np.argmax(sm, axis=0).astype(np.uint8)
 
 
 def denormalize_to_uint8(img_t: torch.Tensor) -> np.ndarray:
@@ -199,41 +165,29 @@ def make_legend_handles(include_background: bool = True) -> List[Patch]:
 
 
 # -----------------------------------------------------------------------------
-# Data loading (auto-find in val or test)
+# Data loading (RGB + GT, auto-find in val or test)
 # -----------------------------------------------------------------------------
 def _try_load_from_split(split_root: Path, img_id: str):
     if not split_root.exists():
         return None
-
     if split_root.name == "val":
         ds = BiodiversityValDataset(data_root=str(split_root))
-        if img_id not in ds.img_ids:
-            return None
-        idx = ds.img_ids.index(img_id)
-        item = ds[idx]
-        return item["img"], item["gt_semantic_seg"]
-
-    if split_root.name == "test":
+    elif split_root.name == "test":
         ds = BiodiversityTestWithMasksDataset(data_root=str(split_root))
-        if img_id not in ds.img_ids:
-            return None
-        idx = ds.img_ids.index(img_id)
-        item = ds[idx]
-        return item["img"], item["gt_semantic_seg"]
+    else:
+        return None
+    if img_id not in ds.img_ids:
+        return None
+    item = ds[ds.img_ids.index(img_id)]
+    return item["img"], item["gt_semantic_seg"]
 
-    return None
 
-
-def load_tile_any_split(data_root: Path, img_id: str, split_order: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
+def load_tile_any_split(data_root: Path, img_id: str, split_order: List[str]):
     for sp in split_order:
         got = _try_load_from_split(data_root / sp, img_id)
         if got is not None:
             return got
     raise FileNotFoundError(f"{img_id} not found under {data_root} in splits {split_order}")
-
-
-def build_ftunetformer() -> torch.nn.Module:
-    return ft_unetformer(num_classes=6, pretrained=False)
 
 
 # -----------------------------------------------------------------------------
@@ -267,47 +221,30 @@ def make_grid_figure(
     for r, label in enumerate(row_labels):
         ax_lab = fig.add_subplot(gs[r, 0])
         ax_lab.axis("off")
-        ax_lab.text(
-            0.98, 0.5, label,
-            ha="right", va="center",
-            fontsize=row_fs, fontweight="bold",
-        )
+        ax_lab.text(0.98, 0.5, label, ha="right", va="center", fontsize=row_fs, fontweight="bold")
 
     anns = annotations if annotations else []
 
-    keys = ["img", "gt", "s1", "s2", "s3"]
     for c in range(n_cols):
         col = columns[c]
-        for r, k in enumerate(keys):
+        for r, k in enumerate(ROW_KEYS):
             ax = fig.add_subplot(gs[r, c + 1])
             ax.imshow(col[k])
             ax.set_aspect("auto")
             ax.axis("off")
             if r == 0:
-                ax.set_title(col_titles[c], fontsize=col_fs, pad=10, fontweight="bold")
-            # Draw highlight rectangles
+                ax.set_title(col_titles[c], fontsize=col_fs, pad=26, fontweight="bold")
             for ann in anns:
                 if ann["col"] == c and k in ann["rows"]:
                     x, y, w, h = ann["rect"]
-                    ax.add_patch(Rectangle(
-                        (x, y), w, h,
-                        linewidth=ann["lw"],
-                        edgecolor=ann["color"],
-                        facecolor="none",
-                    ))
+                    ax.add_patch(Rectangle((x, y), w, h, linewidth=ann["lw"],
+                                           edgecolor=ann["color"], facecolor="none"))
 
     legend_ax = fig.add_subplot(gs[n_rows, :])
     legend_ax.axis("off")
     legend_ax.legend(
-        handles=legend_handles,
-        loc="center",
-        ncol=3,
-        frameon=False,
-        fontsize=leg_fs,
-        handlelength=2.2,
-        handleheight=1.0,
-        columnspacing=1.6,
-        labelspacing=0.9,
+        handles=legend_handles, loc="center", ncol=3, frameon=False, fontsize=leg_fs,
+        handlelength=2.2, handleheight=1.0, columnspacing=1.6, labelspacing=0.9,
         bbox_to_anchor=(0.55, 0.32),
     )
 
@@ -323,62 +260,33 @@ def main() -> None:
     ap.add_argument("--img-ids", default="biodiversity_1382,biodiversity_0259,biodiversity_2193,biodiversity_1366")
     ap.add_argument("--data-root", default="data/biodiversity_split")
     ap.add_argument("--split-order", default="val,test")
-    ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"])
-    ap.add_argument("--out-path", default="figures/Figure08.pdf")
-
-    # Match the folder names under model_weights/biodiversity/ (3-stage, no-replication).
-    ap.add_argument("--stage1-ckpt", default="model_weights/biodiversity/stage1_baseline")
-    # Stage 2 = deployable OEM-transfer model (2a pre-train + 2b fine-tune merged)
-    ap.add_argument("--stage2-ckpt", default="model_weights/biodiversity/stage2b_oem_finetune")
-    ap.add_argument("--stage3-ckpt", default="model_weights/biodiversity/stage3_clsbal")
-
+    ap.add_argument("--softmax-root", default="sonic/results",
+                    help="root holding seed<seed>/analysis/seed_softmax/<cell>/seed<seed>/<tile>.npy")
+    ap.add_argument("--seed", type=int, default=44, help="median seed used for the paper figures")
+    ap.add_argument("--out-path", default="figures/ablation_qualitative.pdf")
     args = ap.parse_args()
 
     set_plot_style()
     repo_root = find_repo_root()
 
-    device = torch.device("cuda" if args.device == "cuda" and torch.cuda.is_available() else "cpu")
-
     img_ids = [s.strip() for s in args.img_ids.split(",") if s.strip()]
     split_order = [s.strip() for s in args.split_order.split(",") if s.strip()]
     data_root = (repo_root / args.data_root).resolve()
-
-    ckpt_paths = {
-        "s1": resolve_ckpt(str((repo_root / args.stage1_ckpt).resolve())),
-        "s2": resolve_ckpt(str((repo_root / args.stage2_ckpt).resolve())),
-        "s3": resolve_ckpt(str((repo_root / args.stage3_ckpt).resolve())),
-    }
-
-    nets: Dict[str, torch.nn.Module] = {}
-    for k, ck in ckpt_paths.items():
-        net = build_ftunetformer()
-        net = load_net_from_lightning_ckpt(net, ck).to(device)
-        nets[k] = net
-        print(f"{k}: {ck}")
+    softmax_root = (repo_root / args.softmax_root).resolve()
 
     columns: List[Dict[str, np.ndarray]] = []
     for img_id in img_ids:
         img_t, mask_t = load_tile_any_split(data_root, img_id, split_order)
-
         img_rgb = denormalize_to_uint8(img_t)
         gt = mask_t.detach().cpu().numpy().astype(np.uint8)
+        invalid = (gt == 0)   # outside annotated AOI -> black, consistently
 
-        # Outside AOI mask = GT background (0): show as black consistently
-        invalid = (gt == 0)
-
-        pred: Dict[str, np.ndarray] = {}
-        for stage_key in ["s1", "s2", "s3"]:
-            pred[stage_key] = predict_mask(nets[stage_key], img_t, device)
-
-        columns.append({
-            "img": img_rgb,
-            "gt": colorize_mask(gt, invalid=invalid),
-            "s1": colorize_mask(pred["s1"], invalid=invalid),
-            "s2": colorize_mask(pred["s2"], invalid=invalid),
-            "s3": colorize_mask(pred["s3"], invalid=invalid),
-        })
-
-        print(img_id, "outside pixels (gt==0):", int((gt == 0).sum()))
+        col: Dict[str, np.ndarray] = {"img": img_rgb, "gt": colorize_mask(gt, invalid=invalid)}
+        for key, cell in CELLS:
+            pred = softmax_pred(softmax_root, cell, args.seed, img_id)
+            col[key] = colorize_mask(pred, invalid=invalid)
+        columns.append(col)
+        print(f"{img_id}: loaded 4 cells (seed {args.seed}); outside pixels (gt==0): {int(invalid.sum())}")
 
     letters = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"]
     col_titles = [letters[i] if i < len(letters) else f"({i})" for i in range(len(columns))]
@@ -386,21 +294,19 @@ def main() -> None:
     row_labels = [
         "Satellite\nImage",
         "Ground\nTruth",
-        "Stage 1:\nBaseline",
-        "Stage 2:\n+OEM Transfer",
-        "Stage 3:\n+Class-balanced\nsampler (clsbal)",
+        "Baseline",
+        "Transfer\nonly",
+        "Sampler\nonly",
+        "Full",
     ]
 
     handles = make_legend_handles(include_background=True)
-
-    fig = make_grid_figure(columns, col_titles, row_labels, handles,
-                           annotations=HIGHLIGHT_ANNOTATIONS)
+    fig = make_grid_figure(columns, col_titles, row_labels, handles, annotations=HIGHLIGHT_ANNOTATIONS)
 
     out = (repo_root / args.out_path).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
-
     print("Saved:", out)
 
 

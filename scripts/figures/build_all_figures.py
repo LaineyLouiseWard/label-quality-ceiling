@@ -7,14 +7,19 @@ Single entry point to reproduce all manuscript figures.
 Usage:
   python scripts/figures/build_all_figures.py [--device cuda|cpu] [--skip <figN> ...]
 
-Figure types:
-  - Figures 01-02 are TikZ (.tex), compiled with pdflatex and copied to figures/.
-  - Figures 03-11 are Python scripts that write directly to figures/.
+Figures use stable DESCRIPTIVE names (decoupled from printed numbers; see CLAUDE.md).
 
-Figures that require model checkpoints (07, 08, 11) will fail loudly if
-checkpoints are missing; all others depend only on data or saved artifacts.
-Figures 03 and 07 take no --device argument (03 is data-only; 07 hardcodes
-cuda with a CPU fallback), so they are launched without it.
+Figure types:
+  - factorial_design, mitigation_axes, oem_mapping are TikZ (.tex), compiled with
+    pdflatex and copied to figures/.
+  - rgb_tiles, oem_harmonisation, class_distributions, sampler_tiles,
+    ablation_qualitative, confusion_matrices, factorial_effects are Python scripts
+    that write directly to figures/.
+  - The paper's last three figures (boundary_distance, uncertainty_overlay,
+    class_pair_boundary) are produced by scripts/analysis/* and copied in, not here.
+
+ablation_qualitative takes a --device argument (model inference); the rest are data-
+or artifact-only. Pass --skip <name> to skip by the descriptive key.
 """
 
 from __future__ import annotations
@@ -80,25 +85,29 @@ def main() -> None:
     skip = set(args.skip)
 
     # Canonical manuscript figures (ordered)
-    # "mapping" = the grounded OEM<->Bio mapping schematic (Figure_mapping.tex -> final Fig 5).
+    # "mapping" = the grounded OEM<->Bio mapping schematic (oem_mapping.tex -> final Fig 5).
     # Its numeric content is generated reproducibly by _gen_mapping_values.py from the frozen
     # teacher confusion; no campaign dependency, so it builds with the rest of the TikZ set.
     # NOTE: the graphical abstract (graphical_abstract_tikz.tex) is intentionally NOT wired here
     # yet — it needs the median-seed prediction PNGs (biodiversity_1310_stage{1,3,4}*.png) which
     # do not exist until the seed campaign finishes; wiring it now would make this build fail.
     figures: list[tuple[str, callable]] = [
-        ("01", lambda: run_tex(SCRIPTS_DIR / "Figure01.tex")),
-        ("02", lambda: run_tex(SCRIPTS_DIR / "Figure02.tex")),
-        ("mapping", lambda: run_tex(SCRIPTS_DIR / "Figure_mapping.tex")),
-        ("03", lambda: run_py_no_device(SCRIPTS_DIR / "Figure03.py")),
-        ("04", lambda: run_py_no_device(SCRIPTS_DIR / "Figure04.py")),
-        ("05", lambda: run_py_no_device(SCRIPTS_DIR / "Figure05.py")),
-        ("06", lambda: run_py_no_device(SCRIPTS_DIR / "Figure06.py")),
-        ("07", lambda: run_py_no_device(SCRIPTS_DIR / "Figure07.py")),
-        ("08", lambda: run_py(SCRIPTS_DIR / "Figure08.py", [], args.device)),
-        ("09", lambda: run_py_no_device(SCRIPTS_DIR / "Figure09.py")),
-        ("10", lambda: run_py_no_device(SCRIPTS_DIR / "Figure10.py")),
-        ("11", lambda: run_py(SCRIPTS_DIR / "Figure11.py", [], args.device)),
+        # 2026-06-25 figure audit: figures now use stable DESCRIPTIVE names (decoupled from
+        # printed numbers, which LaTeX assigns) so reordering during revision needs no renames.
+        # The cut figures (clsbal weight histogram, recovered-vs-lost transitions, the three
+        # supplementary uncertainty figures) are archived under _archive/figures_cut/.
+        # The paper's last three figures (boundary_distance, uncertainty_overlay,
+        # class_pair_boundary) are produced by scripts/analysis/* and copied in, not built here.
+        ("factorial_design",    lambda: run_tex(SCRIPTS_DIR / "factorial_design.tex")),
+        ("mitigation_axes",     lambda: run_tex(SCRIPTS_DIR / "mitigation_axes.tex")),
+        ("oem_mapping",         lambda: run_tex(SCRIPTS_DIR / "oem_mapping.tex")),
+        ("rgb_tiles",           lambda: run_py_no_device(SCRIPTS_DIR / "rgb_tiles.py")),
+        ("oem_harmonisation",   lambda: run_py_no_device(SCRIPTS_DIR / "oem_harmonisation.py")),
+        ("class_distributions", lambda: run_py_no_device(SCRIPTS_DIR / "class_distributions.py")),
+        ("sampler_tiles",       lambda: run_py_no_device(SCRIPTS_DIR / "sampler_tiles.py")),
+        ("ablation_qualitative",lambda: run_py(SCRIPTS_DIR / "ablation_qualitative.py", [], args.device)),
+        ("confusion_matrices",  lambda: run_py_no_device(SCRIPTS_DIR / "confusion_matrices.py")),
+        ("factorial_effects",   lambda: run_py_no_device(SCRIPTS_DIR / "factorial_effects.py")),
     ]
 
     results: dict[str, bool | str] = {}

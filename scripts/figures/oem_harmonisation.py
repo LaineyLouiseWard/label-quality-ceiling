@@ -14,7 +14,7 @@ Defaults target a tile that contains all 8 OEM classes:
   data/openearthmap_raw/.../dolnoslaskie/labels/dolnoslaskie_25.tif
 
 Run:
-  python scripts/figures/Figure04.py
+  python scripts/figures/oem_harmonisation.py
 """
 
 from __future__ import annotations
@@ -343,7 +343,7 @@ def main() -> None:
     mask8_tif = Path(args.mask8_tif) if args.mask8_tif else repo / (
         f"data/openearthmap_raw/OpenEarthMap/OpenEarthMap_wo_xBD/{region}/labels/{raw_tile}.tif"
     )
-    out_pdf = Path(args.out) if args.out else repo / "figures/Figure04.pdf"
+    out_pdf = Path(args.out) if args.out else repo / "figures/oem_harmonisation.pdf"
 
     for p in [rgb_tif, mask6_png, mask8_tif]:
         if not p.exists():

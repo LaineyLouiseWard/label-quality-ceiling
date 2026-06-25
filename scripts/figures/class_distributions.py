@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-scripts/figures/Figure05.py
+scripts/figures/class_distributions.py
 
 Combined class-distribution comparison of the two datasets used in this study
 (review comment C14: present the Biodiversity and OpenEarthMap distributions
@@ -20,7 +20,7 @@ Data:
   data/openearthmap_filtered/masks/*.tif  (native 8-class OEM, remapped here to 6 classes)
 
 Output:
-  figures/Figure05.pdf
+  figures/class_distributions.pdf
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ BIO_COLOR = {
     4: [59, 141, 247],   # Settlement
     5: [255, 214, 33],   # Semi-natural grassland
 }
-# Display names match the OEM<->Biodiversity mapping schematic (Figure_mapping.tex)
+# Display names match the OEM<->Biodiversity mapping schematic (oem_mapping.tex)
 # so the two figures read as a connected pair (shared palette + shared class names).
 BIO_NAMES = {1: "Forest land", 2: "Grassland", 3: "Cropland", 4: "Settlement", 5: "Semi-nat."}
 BIO_IDS = [1, 2, 3, 4, 5]
@@ -215,7 +215,7 @@ def main():
              ha="center", va="center", fontsize=15, fontweight="bold")
 
     # Shared "Biodiversity classes" swatch key — canonical STUDENT_PALETTE colours and the
-    # same display names used by the OEM<->Biodiversity mapping schematic (Figure_mapping.tex),
+    # same display names used by the OEM<->Biodiversity mapping schematic (oem_mapping.tex),
     # so the distribution figure and the mapping schematic read as a connected pair.
     key_handles = [
         Patch(facecolor=np.array(BIO_COLOR[k]) / 255.0, edgecolor="none", label=BIO_NAMES[k])
@@ -228,7 +228,7 @@ def main():
         handlelength=1.1, handleheight=1.0, columnspacing=1.4,
     )
 
-    out = REPO_ROOT / "figures" / "Figure05.pdf"
+    out = REPO_ROOT / "figures" / "class_distributions.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
