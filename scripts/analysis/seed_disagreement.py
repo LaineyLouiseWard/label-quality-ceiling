@@ -241,6 +241,18 @@ def list_tiles(softmax_root, seeds, cell):
     return sorted(p.stem for p in d0.glob("*.npy"))
 
 
+def list_val_tiles(softmax_root, seeds, cell, mask_dir):
+    """Tiles present in BOTH the softmax dumps and the mask dir, plus the dropped set.
+
+    The dumps span a superset of tiles (an earlier broad eval); the evaluation set is
+    whatever has a ground-truth mask. The mask dir is the canonical Irish val split, so
+    foreign tiles (e.g. col1_/den*_) with no Irish mask are dropped rather than scored on.
+    Returns (kept_ids, dropped_ids)."""
+    ids = list_tiles(softmax_root, seeds, cell)
+    kept = [i for i in ids if (Path(mask_dir) / f"{i}.png").exists()]
+    return kept, sorted(set(ids) - set(kept))
+
+
 def load_seed_stack(softmax_root, seeds, cell, img_id) -> np.ndarray:
     """(N, C, H, W) float32 stack of the N seeds' softmax for one tile."""
     arrs = []
@@ -254,7 +266,10 @@ def load_seed_stack(softmax_root, seeds, cell, img_id) -> np.ndarray:
 # Driver
 # ---------------------------------------------------------------------------
 def run_cell(softmax_root, mask_dir, cell, seeds, out_dir, save_maps_for=None):
-    img_ids = list_tiles(softmax_root, seeds, cell)
+    img_ids, dropped = list_val_tiles(softmax_root, seeds, cell, mask_dir)
+    if dropped:
+        print(f"[{cell}] scoring {len(img_ids)} val tiles with masks; "
+              f"dropped {len(dropped)} dump tiles without an Irish mask")
     acc = Accumulator()
     saved_maps = {}
     save_maps_for = set(save_maps_for or [])
@@ -320,10 +335,10 @@ def main():
 
     cells = args.cells or ["stage3_clsbal", "stage1_baseline"]
 
-    # auto-pick representative rare-class tiles if none given
+    # auto-pick representative rare-class tiles if none given (Irish val tiles only)
     if args.save_map_tiles is None:
-        save_tiles = pick_rare_class_tiles(args.mask_dir,
-                                           list_tiles(args.softmax_root, args.seeds, cells[0]))
+        val_ids, _ = list_val_tiles(args.softmax_root, args.seeds, cells[0], args.mask_dir)
+        save_tiles = pick_rare_class_tiles(args.mask_dir, val_ids)
     else:
         save_tiles = args.save_map_tiles
 

@@ -214,9 +214,9 @@ def make_grid_figure(
         hspace=0.03,
     )
 
-    row_fs = 42
-    col_fs = 42
-    leg_fs = 42
+    row_fs = 50
+    col_fs = 50
+    leg_fs = 50
 
     for r, label in enumerate(row_labels):
         ax_lab = fig.add_subplot(gs[r, 0])

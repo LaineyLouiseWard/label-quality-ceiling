@@ -58,35 +58,32 @@ CLASS_CMAP = ListedColormap(PAL)
 CLASS_NORM = BoundaryNorm(np.arange(-0.5, C + 0.5, 1), C)
 FG = list(range(1, C))
 
-# The two boundary-rich draft tiles (see the boundary-rich-tile analysis):
-#   biodiversity_1969 -- BEST OVERALL: 9 distinct fg-fg pairs, both rare classes meet Forest,
-#                        Grassland and each other; visually even (top pair only 22%).
-#   biodiversity_1403 -- BEST Settlement<->Seminatural contact (27%): the two rare classes meet
-#                        each other at length -> directly illustrates the top-uncertain pair.
-DEFAULT_TILES = ["biodiversity_1969", "biodiversity_1403"]
+# The two illustrative tiles on the final ADE20K 10-seed model (re-selected 2026-06-28; the
+# earlier 1403 hard case is now well segmented on the strong backbone, ~5% error):
+#   biodiversity_1969 -- ACCURATE tile (3.7% of fg pixels differ): the few residual errors and
+#                        the bright entropy both trace GT boundaries; interiors stay dark.
+#   biodiversity_2126 -- HARD tile (23% differ): a large semi-natural-grassland region is
+#                        labelled grassland by the model -> the genuinely ambiguous
+#                        semi-natural<->grassland distinction; the ensemble flags it
+#                        (mean entropy 0.27 on the error vs 0.11 where correct).
+DEFAULT_TILES = ["biodiversity_1969", "biodiversity_2126"]
 
-# Contrast boxes (x0, y0, x1, y1) drawn on the GT and entropy panels of a tile to show, in
-# space, the class-pair decoupling that Figure 13 reports dataset-wide: a confident COMMON
-# boundary stays dark while an uncertain RARE-class contact lights up. Window locations and
-# their local mean entropy were measured from the data (see the box-finding analysis).
-CONTRAST_BOXES = {
-    "biodiversity_1403": [
-        (18, 56, 168, 206),    # settlement<->semi-natural contact  (local mean H ~0.47, bright)
-        (349, 93, 499, 243),   # forest<->grassland boundary        (local mean H ~0.19, dark)
-    ],
-}
+# Contrast boxes are not drawn for the re-selected tiles; the class-pair uncertainty contrast
+# (rare-class contacts uncertain, the common forest-grassland boundary confident) is carried
+# quantitatively by the class-pair matrix figure.
+CONTRAST_BOXES = {}
 
 
 def setup_font(use_tex: bool):
     rc = {
         "font.family": "serif",
         "font.serif": ["Computer Modern Roman"],
-        "axes.labelsize": 16,
-        "font.size": 16,
-        "legend.fontsize": 17,
-        "xtick.labelsize": 14,
-        "ytick.labelsize": 14,
-        "axes.titlesize": 18,
+        "axes.labelsize": 19,
+        "font.size": 19,
+        "legend.fontsize": 19,
+        "xtick.labelsize": 16,
+        "ytick.labelsize": 16,
+        "axes.titlesize": 20,
         "figure.dpi": 150,
     }
     if use_tex:
@@ -170,10 +167,10 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
     # stack. Explicit margins reserve a band at the bottom for the legend (no overlap) and a
     # gap on the right (colourbar not touching the last image). figsize chosen so cells are
     # square (images fill them; no internal whitespace).
-    fig = plt.figure(figsize=(14.6, 2.62 * n))
-    gs = fig.add_gridspec(n, 10, width_ratios=[1, 1, 1, 1, 1, 1, 0.12, 0.06, 0.22, 0.06],
+    fig = plt.figure(figsize=(15.2, 2.62 * n))
+    gs = fig.add_gridspec(n, 10, width_ratios=[1, 1, 1, 1, 1, 1, 0.16, 0.06, 0.46, 0.06],
                           wspace=0.05, hspace=0.05,
-                          left=0.012, right=0.96, top=0.90, bottom=0.17)
+                          left=0.012, right=0.93, top=0.90, bottom=0.17)
     axes = np.empty((n, 6), dtype=object)
     for r in range(n):
         for c in range(6):
@@ -234,10 +231,10 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
 
     cb_e = fig.colorbar(im_ent, cax=cax_e)
     cb_e.set_label(r"$H[\bar{p}]\ /\ \log 6$" if use_tex else "entropy / log 6", fontsize=17)
-    cb_e.ax.tick_params(labelsize=14)
+    cb_e.ax.tick_params(labelsize=15)
     cb_f = fig.colorbar(im_mi, cax=cax_f)
     cb_f.set_label(r"$I\ /\ \log 6$" if use_tex else "MI / log 6", fontsize=17)
-    cb_f.ax.tick_params(labelsize=14)
+    cb_f.ax.tick_params(labelsize=15)
 
     # class legend in the reserved bottom band (cannot overlap the images)
     handles = [Patch(facecolor=PAL[k], edgecolor="0.3",
@@ -245,7 +242,7 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
                for k in range(C)]
     handles.append(Patch(facecolor=ERR_RGB, edgecolor="0.3", label="Prediction error"))
     fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False,
-               bbox_to_anchor=(0.5, 0.015), fontsize=16, columnspacing=1.3,
+               bbox_to_anchor=(0.5, 0.015), fontsize=19, columnspacing=1.3,
                handlelength=1.5, handletextpad=0.5)
 
     # No baked-in title: this is a paper figure; its caption lives in the LaTeX \caption.

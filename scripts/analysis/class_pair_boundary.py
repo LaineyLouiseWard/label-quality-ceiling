@@ -54,7 +54,7 @@ from scripts.analysis.seed_disagreement import (  # noqa: E402
     C,
     tile_uncertainty,
     load_mask,
-    list_tiles,
+    list_val_tiles,
     load_seed_stack,
 )
 
@@ -156,7 +156,9 @@ class PairAccumulator:
 # Driver
 # ---------------------------------------------------------------------------
 def run(softmax_root, mask_dir, cell, seeds, out_dir):
-    img_ids = list_tiles(softmax_root, seeds, cell)
+    img_ids, dropped = list_val_tiles(softmax_root, seeds, cell, mask_dir)
+    if dropped:
+        print(f"[{cell}] scoring {len(img_ids)} Irish val tiles; dropped {len(dropped)} non-Irish")
     acc = PairAccumulator()
     for iid in img_ids:
         stack = load_seed_stack(softmax_root, seeds, cell, iid)   # (N, C, H, W)
@@ -242,11 +244,11 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
     rc = {
         "font.family": "serif",
         "font.serif": ["Computer Modern Roman"],
-        "axes.labelsize": 11.5,
-        "font.size": 11.5,
-        "xtick.labelsize": 11,
-        "ytick.labelsize": 11,
-        "axes.titlesize": 12.5,
+        "axes.labelsize": 13,
+        "font.size": 12,
+        "xtick.labelsize": 11.5,
+        "ytick.labelsize": 11.5,
+        "axes.titlesize": 14,
         "figure.dpi": 150,
     }
     if use_tex:
@@ -269,7 +271,7 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
     Im = np.ma.masked_where(diag | np.isnan(I), I)
     cnt_disp = np.ma.masked_where(diag | (cnt == 0), cnt)
 
-    fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.4), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=(11.8, 4.3), constrained_layout=True)
 
     def _annotate(ax, M, fmt, txtcond):
         for i in range(len(fg)):
@@ -278,7 +280,7 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
                     continue
                 val = M[i, j]
                 ax.text(j, i, fmt(val), ha="center", va="center",
-                        fontsize=9.5, color=txtcond(val))
+                        fontsize=11, color=txtcond(val))
 
     # Panel 1: prevalence (log scale for dynamic range)
     cmap_c = plt.cm.viridis.copy()
@@ -286,7 +288,7 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
     pos = cnt_disp.compressed()
     vmax = pos.max() if pos.size else 1
     im0 = axes[0].imshow(np.ma.log10(cnt_disp + 1), cmap=cmap_c, aspect="equal")
-    axes[0].set_title("Boundary prevalence\n(pixel count, log scale)")
+    axes[0].set_title("(a) Boundary prevalence")
     cb0 = fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
     cb0.set_label(r"$\log_{10}(\mathrm{count}+1)$")
     _annotate(axes[0], cnt_disp,
@@ -297,7 +299,7 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
     cmap_u = plt.cm.magma.copy()
     cmap_u.set_bad("0.9")
     im1 = axes[1].imshow(Hm, cmap=cmap_u, aspect="equal")
-    axes[1].set_title("Mean ensemble total entropy\nat shared boundary")
+    axes[1].set_title("(b) Mean total entropy")
     cb1 = fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
     cb1.set_label(r"$H[\bar p]\ /\ \log 6$")
     hv = Hm.compressed()
@@ -309,7 +311,7 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
     cmap_m = plt.cm.cividis.copy()
     cmap_m.set_bad("0.9")
     im2 = axes[2].imshow(Im, cmap=cmap_m, aspect="equal")
-    axes[2].set_title("Mean ensemble mutual information\n(epistemic) at shared boundary")
+    axes[2].set_title("(c) Mean mutual information")
     cb2 = fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
     cb2.set_label(r"$I\ /\ \log 6$")
     iv = Im.compressed()

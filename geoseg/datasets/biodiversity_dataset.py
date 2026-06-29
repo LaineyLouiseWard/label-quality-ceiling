@@ -360,11 +360,15 @@ class _BiodiversitySegDataset(Dataset):
         transform=None,
         img_suffix: str = ".tif",
         mask_suffix: str = ".png",
+        mosaic_ratio: float = 0.0,
     ):
         self.data_root = data_root
         self.transform = transform
         self.img_suffix = img_suffix
         self.mask_suffix = mask_suffix
+        # Mosaic augmentation: fraction of training items composed as a 2x2 splice
+        # of 4 tiles BEFORE the normal transform. 0.0 = off (default; val/test stay off).
+        self.mosaic_ratio = float(mosaic_ratio)
 
         self.img_dir = osp.join(data_root, "images")
         self.mask_dir = osp.join(data_root, "masks")
@@ -374,13 +378,56 @@ class _BiodiversitySegDataset(Dataset):
     def __len__(self) -> int:
         return len(self.img_ids)
 
-    def __getitem__(self, idx: int):
+    def _load_pil(self, idx: int):
+        """Read one tile as (RGB PIL uint8, L PIL mask), sizes matched."""
         img_id = self.img_ids[idx]
         img = _read_tif_as_rgb_uint8(osp.join(self.img_dir, img_id + self.img_suffix))
         mask = Image.open(osp.join(self.mask_dir, img_id + self.mask_suffix)).convert("L")
-
         if img.size != mask.size:
             mask = mask.resize(img.size, Image.NEAREST)
+        return img, mask
+
+    def _make_mosaic(self, idx: int):
+        """2x2 mosaic of 4 tiles (this idx + 3 random) onto a fixed canvas.
+
+        Robust by construction: each source is resized to the full canvas (image
+        bilinear, mask NEAREST) so any quadrant crop is valid regardless of the
+        source tile's native size; masks never interpolate, so output classes stay
+        a subset of the inputs' {0..5}. Uses np.random (seeded per-worker by
+        pl.seed_everything(workers=True)) for reproducibility.
+        """
+        H, W = ORIGIN_IMG_SIZE  # (512, 512)
+        idxs = [idx] + [int(np.random.randint(0, len(self.img_ids))) for _ in range(3)]
+        # splice centre kept away from edges so every quadrant is >= H/4 x W/4
+        cx = int(np.random.randint(W // 4, W - W // 4 + 1))
+        cy = int(np.random.randint(H // 4, H - H // 4 + 1))
+        quad = [(cy, cx), (cy, W - cx), (H - cy, cx), (H - cy, W - cx)]  # (h, w) per pane
+        pos = [(0, 0), (0, cx), (cy, 0), (cy, cx)]                       # top-left (row, col)
+        img_canvas = np.zeros((H, W, 3), dtype=np.uint8)
+        mask_canvas = np.zeros((H, W), dtype=np.uint8)
+        for k in range(4):
+            ip, mp = self._load_pil(idxs[k])
+            ia = np.asarray(ip.resize((W, H), Image.BILINEAR), dtype=np.uint8)
+            ma = np.asarray(mp.resize((W, H), Image.NEAREST), dtype=np.uint8)
+            qh, qw = quad[k]
+            y0 = int(np.random.randint(0, H - qh + 1))
+            x0 = int(np.random.randint(0, W - qw + 1))
+            r, c = pos[k]
+            img_canvas[r:r + qh, c:c + qw] = ia[y0:y0 + qh, x0:x0 + qw]
+            mask_canvas[r:r + qh, c:c + qw] = ma[y0:y0 + qh, x0:x0 + qw]
+        return Image.fromarray(img_canvas), Image.fromarray(mask_canvas, mode="L")
+
+    def __getitem__(self, idx: int):
+        img_id = self.img_ids[idx]
+        use_mosaic = (
+            self.transform is not None
+            and self.mosaic_ratio > 0.0
+            and np.random.random() < self.mosaic_ratio
+        )
+        if use_mosaic:
+            img, mask = self._make_mosaic(idx)
+        else:
+            img, mask = self._load_pil(idx)
 
         if self.transform:
             img_np, mask_np = self.transform(img, mask)
@@ -411,8 +458,12 @@ class _BiodiversitySegDataset(Dataset):
 # -----------------------------------------------------------------------------
 
 class BiodiversityTrainDataset(_BiodiversitySegDataset):
-    def __init__(self, data_root, transform=None):
-        super().__init__(data_root=data_root, transform=(transform or train_aug_random))
+    def __init__(self, data_root, transform=None, mosaic_ratio: float = 0.0):
+        super().__init__(
+            data_root=data_root,
+            transform=(transform or train_aug_random),
+            mosaic_ratio=mosaic_ratio,
+        )
 
 
 class BiodiversityValDataset(_BiodiversitySegDataset):

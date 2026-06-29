@@ -31,9 +31,11 @@ repo_root = find_repo_root(Path.cwd())
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-# 10-seed confusion: sum the per-seed 6x6 integer count matrices for each cell, then (in
-# main) drop Background and row-normalise. Per-seed files live under sonic/results/.
-RESULTS_ROOT = repo_root / "sonic/results"
+# 10-seed confusion: read the CANONICAL summed 6x6 count confusion recomputed on the clean
+# 219-tile Irish val set (eval_on_dumps_219.py), then (in main) drop Background and
+# row-normalise. NOT the Sonic seed*/val/<cell>/confusion_matrix.npy artefacts -- those were
+# scored on 231 tiles (12 foreign tiles with no Irish mask). See PLOT_PLAN D.4b.
+EVAL_DIR = repo_root / "analysis/eval_219"
 CELL_BASELINE = "stage1_baseline"
 CELL_FULL = "stage3_clsbal"
 
@@ -43,15 +45,17 @@ OUT_PDF = OUT_DIR / "confusion_matrices.pdf"
 
 
 def aggregate_confusion(cell: str):
-    """Sum per-seed 6x6 integer count confusion matrices over all available seeds."""
-    paths = sorted(RESULTS_ROOT.glob(f"seed*/val/{cell}/confusion_matrix.npy"))
-    if not paths:
-        raise FileNotFoundError(f"no confusion matrices for {cell} under {RESULTS_ROOT}/seed*/val/")
-    total = None
-    for p in paths:
-        m = np.load(p).astype(np.int64)
-        total = m if total is None else total + m
-    return total, len(paths)
+    """Load the canonical summed 6x6 confusion (over seeds) on the clean 219-tile set.
+
+    Produced by scripts/analysis/eval_on_dumps_219.py from the per-seed softmax dumps with
+    the Irish-mask join (ignore_index=0). Run that first if the file is missing."""
+    import json
+    cm_path = EVAL_DIR / f"confusion_{cell}.npy"
+    if not cm_path.exists():
+        raise FileNotFoundError(f"{cm_path} missing -- run scripts/analysis/eval_on_dumps_219.py")
+    total = np.load(cm_path).astype(np.int64)
+    n_seeds = json.load(open(EVAL_DIR / "per_class_iou.json"))[cell]["n_seeds"]
+    return total, n_seeds
 
 # ---- style: match your other figs ----
 mpl.rcParams.update({

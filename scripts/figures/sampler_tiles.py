@@ -221,31 +221,32 @@ def plot_figure07_clsbal_sampling(
     hard_minority, hard_final,
     out_pdf: Path
 ):
-    fig = plt.figure(figsize=(8*3, 4.2*3), dpi=300)
-    gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.18], hspace=0.15, wspace=-0.15)
+    fig = plt.figure(figsize=(9.6, 5.7), dpi=300)
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 0.16], hspace=0.18, wspace=0.04)
 
     # (a) low-weight tile
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.imshow(easy_mask, cmap=cmap, norm=norm, interpolation="nearest")
     ax1.set_axis_off()
-    add_panel_label_above_center(ax1, "(a)")
-    add_weights_text(ax1, f"{easy_minority}, weight={easy_final:.2f}", fontsize=28)
+    add_panel_label_above_center(ax1, "(a)", fontsize=17)
+    add_weights_text(ax1, f"{easy_minority}, weight={easy_final:.2f}", fontsize=14)
 
     # (b) high-weight tile
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.imshow(hard_mask, cmap=cmap, norm=norm, interpolation="nearest")
     ax2.set_axis_off()
-    add_panel_label_above_center(ax2, "(b)")
-    add_weights_text(ax2, f"{hard_minority}, weight={hard_final:.2f}", fontsize=28)
+    add_panel_label_above_center(ax2, "(b)", fontsize=17)
+    add_weights_text(ax2, f"{hard_minority}, weight={hard_final:.2f}", fontsize=14)
 
-    # legend row
+    # shared class legend row
     legend_ax = fig.add_subplot(gs[1, :])
     legend_ax.axis("off")
     handles = [Patch(facecolor=colors[i], label=CLASS_NAMES[i]) for i in range(6)]
-    legend_ax.legend(handles=handles, loc="center",bbox_to_anchor=(0.5, 0.40), ncol=3, frameon=False, fontsize=32)
+    legend_ax.legend(handles=handles, loc="center", bbox_to_anchor=(0.5, 0.40), ncol=6,
+                     frameon=False, fontsize=15, columnspacing=1.2, handletextpad=0.5)
 
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_pdf, dpi=300, pad_inches=0.02)
+    fig.savefig(out_pdf, dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close(fig)
     print("Saved:", out_pdf)
 

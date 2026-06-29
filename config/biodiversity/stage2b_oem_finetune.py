@@ -20,6 +20,7 @@ Run:
 
 from __future__ import annotations
 
+import os
 from torch.utils.data import DataLoader
 import torch
 
@@ -42,12 +43,18 @@ from geoseg.utils.optim import Lookahead, process_model_params
 max_epoch = 45
 ignore_index = 0
 
-train_batch_size = 2
-val_batch_size = 2
+# --- Batch/LR variant (env-gated): BATCH_VARIANT=b2 (default) | b4 — MUST match across all 5 cells ---
+_BV = os.environ.get("BATCH_VARIANT", "b2")
+assert _BV in ("b2", "b4"), f"BATCH_VARIANT must be b2 or b4, got {_BV!r}"
+_LR_SCALE = 2.0 if _BV == "b4" else 1.0
+_BATCH = 4 if _BV == "b4" else 2
 
-lr = 3e-4
+train_batch_size = _BATCH
+val_batch_size = _BATCH
+
+lr = 3e-4 * _LR_SCALE
 weight_decay = 2.5e-4
-backbone_lr = 3e-5
+backbone_lr = 3e-5 * _LR_SCALE
 backbone_weight_decay = 2.5e-4
 
 num_classes = 6

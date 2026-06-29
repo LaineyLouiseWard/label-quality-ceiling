@@ -90,7 +90,9 @@ def effect_contrasts(cv: dict[str, float]) -> dict[str, float]:
     return {
         "transfer": 0.5 * (t + f) - 0.5 * (b + s),     # main effect of OEM transfer
         "sampler": 0.5 * (s + f) - 0.5 * (b + t),      # main effect of clsbal sampler
-        "interaction": (f - t) - (s - b),              # transfer x sampler interaction
+        # Standard 2^2 factorial (Montgomery): interaction = 1/2[(ab - b) - (a - (1))],
+        # on the SAME scale as the main effects so transfer + sampler == full - baseline.
+        "interaction": 0.5 * ((f - s) - (t - b)),      # transfer x sampler interaction
         "total": f - b,                                # cumulative gain (secondary)
     }
 
@@ -437,6 +439,10 @@ def main() -> None:
     ap.add_argument("--results-dir", type=str, default=None,
                     help="Flat campaign drop of seed<N>_<cell>.json (val cells). If set, val is "
                          "read from here instead of the per-seed worktree layout.")
+    ap.add_argument("--test-results-dir", type=str, default=None,
+                    help="Flat campaign drop of seed<N>_<cell>.json (test cells). If set, test is "
+                         "read from here instead of the per-seed worktree layout. Use the CURRENT "
+                         "final_results_test drop so no stale per-seed eval can be read.")
     ap.add_argument("--out-dir", type=str, default=str(REPO / "analysis" / "seed_aggregate"))
     ap.add_argument("--strict", action="store_true",
                     help="Fail if any requested seed source or any factorial cell (val) is missing.")
@@ -445,6 +451,7 @@ def main() -> None:
     seeds, root_seed = args.seeds, args.root_seed
     out_dir = Path(args.out_dir)
     results_dir = Path(args.results_dir) if args.results_dir else None
+    test_results_dir = Path(args.test_results_dir) if args.test_results_dir else None
 
     missing_src, missing_cells = check_coverage(seeds, root_seed, results_dir)
     if missing_src:
@@ -455,15 +462,17 @@ def main() -> None:
     if args.strict and (missing_src or missing_cells):
         raise SystemExit("[strict] incomplete campaign — aborting.")
 
-    # Collect every (split, cell, seed) that exists. val may come from the flat drop; test
-    # (final model only) always from the per-seed worktree layout.
+    # Collect every (split, cell, seed) that exists. Both splits read from the CURRENT flat
+    # campaign drops when given (--results-dir for val, --test-results-dir for test); the
+    # per-seed worktree layout is only a legacy fallback when no flat drop is supplied.
+    flat_for = {"val": results_dir, "test": test_results_dir}
     data = {split: {} for split in SPLITS}
     for split in SPLITS:
         for label, folder in STAGE_VIEW:
             seedmap = {}
             for s in seeds:
-                if results_dir is not None and split == "val":
-                    p = flat_path(results_dir, s, folder)
+                if flat_for[split] is not None:
+                    p = flat_path(flat_for[split], s, folder)
                 else:
                     p = metrics_path(s, root_seed, split, folder)
                 if p.exists():

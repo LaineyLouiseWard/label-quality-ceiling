@@ -172,93 +172,10 @@
 
 % Panel-A title
 \node[hdr, anchor=south] at ($(oem0.north)!0.5!(st0.north)+(0,0.55)$)
-  {(a) Hard pre-training map: argmax routing};
+  {Grounded OpenEarthMap $\rightarrow$ Biodiversity pre-training mapping};
 \node[font=\footnotesize\bfseries, anchor=south] at ([yshift=1pt]oem0.north) {OEM (teacher)};
 \node[font=\footnotesize\bfseries, anchor=south] at ([yshift=1pt]st0.north) {Biodiversity};
 
-% =====================================================================
-% PANEL B — soft teacher distribution (9x6 value-scaled heatmap)
-% =====================================================================
-% Anchor Panel B below Panel A.
-\def\bx{0.0}            % left edge x of matrix body
-\def\by{-9.6}          % top edge y of first data row
-\def\cw{1.06}          % column step
-\def\ch{0.70}          % row step
-
-% Column headers (student chips, compact)
-\foreach \j/\nm/\col/\wt in {%
-  0/{Backg.}/cBack/1, 1/{Forest}/cForest/1, 2/{Grass.}/cGrass/0,
-  3/{Crop.}/cCrop/0, 4/{Settl.}/cSettle/1, 5/{Semi.}/cSemi/0%
-}{
-  \pgfmathsetmacro{\cx}{\bx + \j*\cw}
-  \ifnum\wt=1
-    \node[schip, fill=\col, text=white, minimum width=0.98cm, minimum height=0.5cm, font=\scriptsize]
-      at (\cx,{\by+\ch}) {\nm};
-  \else
-    \node[schip, fill=\col, text=black, minimum width=0.98cm, minimum height=0.5cm, font=\scriptsize]
-      at (\cx,{\by+\ch}) {\nm};
-  \fi
-}
-
-% Row headers (OEM chips, compact) + cells.
-% Per row: argmax column index, and the 6 percentages (SOFT matrix x100; _gen_mapping_values.py).
-\foreach \i/\nm/\rcol/\rwt/\arg/\va/\vb/\vc/\vd/\ve/\vf in {%
-  0/Unknown/oUnknown/1/0/99.1/0.3/0.3/0.1/0.0/0.1,
-  1/Bareland/oBare/1/5/0.2/9.3/31.1/14.5/4.2/40.7,
-  2/Rangeland/oRange/0/2/0.1/19.5/53.7/1.6/5.3/19.9,
-  3/Developed/oDev/0/4/0.3/12.0/19.1/5.8/58.7/4.1,
-  4/Road/oRoad/0/4/0.4/20.4/10.4/11.4/56.5/0.8,
-  5/Tree/oTree/1/1/0.6/74.8/17.1/0.5/1.9/5.1,
-  6/Water/oWater/1/2/3.2/6.9/57.6/5.2/0.5/26.6,
-  7/Agriculture/oAgri/1/2/0.0/5.1/82.1/7.5/0.5/4.8,
-  8/Building/oBuild/1/4/2.2/4.1/6.5/1.5/84.6/1.1%
-}{
-  \pgfmathsetmacro{\ry}{\by - \i*\ch}
-  \ifnum\rwt=1
-    \node[ochip, fill=\rcol, text=white, minimum width=2.0cm, minimum height=0.5cm, anchor=east,
-          font=\scriptsize] at ({\bx-0.62*\cw},\ry) {\nm};
-  \else
-    \node[ochip, fill=\rcol, text=black, minimum width=2.0cm, minimum height=0.5cm, anchor=east,
-          font=\scriptsize] at ({\bx-0.62*\cw},\ry) {\nm};
-  \fi
-  % 6 cells; background = student-column colour scaled by value (fill=col!val).
-  \foreach \j/\col/\val in {0/cBack/\va,1/cForest/\vb,2/cGrass/\vc,3/cCrop/\vd,4/cSettle/\ve,5/cSemi/\vf}{
-    \pgfmathsetmacro{\cx}{\bx + \j*\cw}
-    % blanked grey for <1% ; scaled colour otherwise ; bold border on argmax.
-    \pgfmathparse{\val<1.0 ? 1 : 0}\edef\isblank{\pgfmathresult}
-    % colour mix: cap at 90 for readability of dark student colours; Background(black) handled below.
-    \pgfmathsetmacro{\mix}{min(\val,100)}
-    \ifnum\j=0
-      % Background column is black -> scale fill on black; pick text colour by fill darkness so
-      % small-but->=1 values (Water 3.2, Building 2.2) are not rendered white-on-near-white.
-      \ifnum\isblank=1
-        \node[cell, fill=gray!4, text=black!45] (c\i\j) at (\cx,\ry) {\val};
-      \else
-        \pgfmathparse{\mix<40 ? 1 : 0}\edef\lightbg{\pgfmathresult}
-        \ifnum\lightbg=1
-          \node[cell, fill=black!\mix, text=black!85] (c\i\j) at (\cx,\ry) {\val};
-        \else
-          \node[cell, fill=black!\mix, text=white] (c\i\j) at (\cx,\ry) {\val};
-        \fi
-      \fi
-    \else
-      \ifnum\isblank=1
-        \node[cell, fill=gray!4, text=black!45] (c\i\j) at (\cx,\ry) {\val};
-      \else
-        \node[cell, fill=\col!\mix] (c\i\j) at (\cx,\ry) {\val};
-      \fi
-    \fi
-  }
-  % bold border on argmax cell
-  \pgfmathsetmacro{\acx}{\bx + \arg*\cw}
-  \node[cellarg] at (\acx,\ry) {};
-}
-
-% Panel-B title. (Reworded: "Soft KD targets" was stale — knowledge distillation is dropped
-% from the pipeline. The soft matrix now stands purely as the grounding evidence behind the
-% hard argmax routing in (a): the full teacher distribution over Biodiversity classes.)
-\node[hdr, anchor=south] at ({\bx+2.5*\cw},{\by+\ch+0.55})
-  {(b) Soft teacher distribution: $P(\text{Biodiversity} \mid \text{teacher OEM}) \times 100$};
 
 % =====================================================================
 % No in-figure legend or key: every class is already a named, colour-filled chip in both

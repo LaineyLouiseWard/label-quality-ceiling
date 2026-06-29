@@ -3,8 +3,14 @@ Stage 1 (baseline): supervised training on biodiversity_split with random crops/
 Saves Lightning checkpoints under weights_path, monitored by val_mIoU.
 """
 
+import os
 from torch.utils.data import DataLoader
 import torch
+
+# Mosaic augmentation ratio — env-gated for the pre-launch screen (0.0 = off).
+MOSAIC_RATIO = float(os.environ.get("MOSAIC_RATIO", "0.0"))
+# Optional output-name suffix so screen variants don't collide (e.g. "_nomosaic").
+RUN_TAG = os.environ.get("RUN_TAG", "")
 
 from geoseg.losses import *
 from geoseg.datasets.biodiversity_dataset import (
@@ -27,13 +33,21 @@ max_epoch = 45
 # Loss/metric ignore label (you confirmed: background=0 should be ignored)
 ignore_index = 0
 
-train_batch_size = 2
-val_batch_size = 2
+# --- Batch/LR variant (env-gated): BATCH_VARIANT=b2 (default) | b4 — MUST match across all 5 cells ---
+#   b2 = batch 2, lr 3e-4 / backbone_lr 3e-5  (linear-scaling-correct for batch 2)
+#   b4 = batch 4, lr 6e-4 / backbone_lr 6e-5  (deployed-lineage setting; LR scaled x2 with batch)
+_BV = os.environ.get("BATCH_VARIANT", "b2")
+assert _BV in ("b2", "b4"), f"BATCH_VARIANT must be b2 or b4, got {_BV!r}"
+_LR_SCALE = 2.0 if _BV == "b4" else 1.0
+_BATCH = 4 if _BV == "b4" else 2
 
-lr = 3e-4 # chnaged from 6e-4.
-weight_decay = 2.5e-4 # stay same
-backbone_lr = 3e-5 # changed from 6e.5
-backbone_weight_decay = 2.5e-4 # stay same
+train_batch_size = _BATCH
+val_batch_size = _BATCH
+
+lr = 3e-4 * _LR_SCALE
+weight_decay = 2.5e-4
+backbone_lr = 3e-5 * _LR_SCALE
+backbone_weight_decay = 2.5e-4
 
 num_classes = 6
 classes = CLASSES
@@ -42,7 +56,7 @@ classes = CLASSES
 # -----------------------
 # Logging / checkpoints
 # -----------------------
-weights_name = "stage1_baseline"
+weights_name = f"stage1_baseline{RUN_TAG}"
 weights_path = f"model_weights/biodiversity/{weights_name}"
 test_weights_name = weights_name
 log_name = f"biodiversity/{weights_name}"
@@ -59,11 +73,11 @@ resume_ckpt_path = None
 
 
 # -----------------------
-# Model (no pretrain)
+# Model (ADE20K-pretrained Swin-B backbone via stseg_base.pth)
 # -----------------------
 net = ft_unetformer(
-    pretrained=False,
-    weight_path=None,
+    pretrained=True,
+    weight_path="pretrain_weights/stseg_base.pth",
     num_classes=num_classes,
     decoder_channels=256,
 )
@@ -84,6 +98,7 @@ use_aux_loss = False
 train_dataset = BiodiversityTrainDataset(
     data_root="data/biodiversity_split/train",
     transform=train_aug_random,
+    mosaic_ratio=MOSAIC_RATIO,
 )
 
 val_dataset = BiodiversityValDataset(
