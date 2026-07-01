@@ -272,16 +272,17 @@ Computer Modern / LaTeX font): the TikZ figures (1, 2, the mapping schematic, th
 `pdffonts figures/class_distributions.pdf` should list only `LMRoman`/`LMMath…`, all Type 1.
 
 ```bash
-python scripts/figures/build_all_figures.py --device cuda
+python scripts/figures/build_all_figures.py
 ```
 
 Figures use stable descriptive script names (rather than figure numbers, which LaTeX assigns).
-`build_all_figures.py` renders the core set into `figures/`: it compiles the TikZ `.tex` figures
-with `pdflatex` and copies them in, and runs the matplotlib figures directly. The uncertainty and
-boundary figures are produced by their scripts under `scripts/analysis/`.
+`build_all_figures.py` builds all fourteen figures — it compiles the TikZ `.tex` figures with
+`pdflatex`, runs the matplotlib figures, and runs the two boundary/uncertainty figures under
+`scripts/analysis/` — then copies the set into the submission bundle (`manuscript/Figures/`), where
+`main.tex` reads them.
 
 See [docs/FIGURES.md](docs/FIGURES.md) for the full figure → source-script → output-file map and
-per-figure dependencies. All outputs go to `figures/`.
+per-figure dependencies.
 
 ---
 

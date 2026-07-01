@@ -88,7 +88,7 @@ Results are written to `evaluation/evaluation_results/`.
 All figures from repo root:
 
 ```bash
-python scripts/figures/build_all_figures.py --device cuda
+python scripts/figures/build_all_figures.py
 ```
 
 Individual figures use descriptive script names (see [docs/FIGURES.md](docs/FIGURES.md) for the full map):

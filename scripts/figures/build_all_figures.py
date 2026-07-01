@@ -13,12 +13,13 @@ Figures use stable DESCRIPTIVE names (the printed numbers are assigned by LaTeX)
   - study_area, class_distributions, ablation_qualitative, confusion_matrices,
     factorial_effects, frequency_vs_difficulty, reliability_ece, uncertainty_quality,
     boundary_limited_error are Python scripts that write directly to figures/.
-  - ablation_qualitative takes --device (model inference); the rest read saved
-    outputs. Pass --skip <name> to skip by the descriptive key.
+  - All figures read saved outputs/artifacts (no GPU required).
 
-Not built here: the uncertainty-overlay and class-pair-boundary figures are produced
-by scripts/analysis/*, and the graphical abstract by graphical_abstract_panels.py +
-graphical_abstract_tikz.tex.
+The uncertainty-overlay and class-pair-boundary figures are produced by scripts/analysis/*
+(they depend on saved per-tile evaluation outputs) and copied in under their final names.
+Freshly built figures are synced into the submission bundle (manuscript/Figures/), which is
+where the manuscript reads them. Pass --skip <name> to skip by the descriptive key. The
+graphical abstract is built separately (graphical_abstract_panels.py + graphical_abstract_tikz.tex).
 """
 
 from __future__ import annotations
@@ -33,6 +34,9 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent.parent
 FIGURES_DIR = REPO_ROOT / "figures"
+ANALYSIS_SCRIPTS_DIR = REPO_ROOT / "scripts" / "analysis"
+LABEL_CEILING_DIR = REPO_ROOT / "analysis" / "label_ceiling"
+SUBMISSION_FIGS_DIR = REPO_ROOT / "manuscript" / "Figures"
 
 
 def run_py(script: Path, extra_args: list[str], device: str) -> bool:
@@ -73,6 +77,23 @@ def run_tex(tex: Path) -> bool:
     return True
 
 
+def run_analysis(script_name: str, produced: str, final_name: str) -> bool:
+    """Run a scripts/analysis figure script and copy its output into figures/ under the
+    final manuscript name (these figures depend on saved per-tile evaluation outputs)."""
+    script = ANALYSIS_SCRIPTS_DIR / script_name
+    if not script.exists():
+        print(f"\nERROR: script not found: {script}")
+        return False
+    print(f"\n{'='*60}\nRunning: {script_name}\n{'='*60}")
+    ok = subprocess.run([sys.executable, str(script)], cwd=str(REPO_ROOT)).returncode == 0
+    src = LABEL_CEILING_DIR / produced
+    if not ok or not src.exists():
+        return False
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, FIGURES_DIR / final_name)
+    return True
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Build all manuscript figures.")
     ap.add_argument("--device", default="cuda", choices=["cuda", "cpu"],
@@ -92,13 +113,15 @@ def main() -> None:
         ("oem_mapping",            lambda: run_tex(SCRIPTS_DIR / "oem_mapping.tex")),
         ("study_area",             lambda: run_py_no_device(SCRIPTS_DIR / "study_area.py")),
         ("class_distributions",    lambda: run_py_no_device(SCRIPTS_DIR / "class_distributions.py")),
-        ("ablation_qualitative",   lambda: run_py(SCRIPTS_DIR / "ablation_qualitative.py", [], args.device)),
+        ("ablation_qualitative",   lambda: run_py_no_device(SCRIPTS_DIR / "ablation_qualitative.py")),
         ("confusion_matrices",     lambda: run_py_no_device(SCRIPTS_DIR / "confusion_matrices.py")),
         ("factorial_effects",      lambda: run_py_no_device(SCRIPTS_DIR / "factorial_effects.py")),
         ("frequency_vs_difficulty",lambda: run_py_no_device(SCRIPTS_DIR / "frequency_vs_difficulty.py")),
         ("reliability_ece",        lambda: run_py_no_device(SCRIPTS_DIR / "reliability_ece.py")),
         ("uncertainty_quality",    lambda: run_py_no_device(SCRIPTS_DIR / "uncertainty_quality.py")),
         ("boundary_limited_error", lambda: run_py_no_device(SCRIPTS_DIR / "boundary_limited_error.py")),
+        ("uncertainty_overlay",    lambda: run_analysis("draft_boundary_overlay.py", "draft_boundary_overlay.pdf", "uncertainty_overlay.pdf")),
+        ("class_pair_boundary",    lambda: run_analysis("class_pair_boundary.py", "Npair_class_pair_matrix.pdf", "class_pair_boundary.pdf")),
     ]
 
     results: dict[str, bool | str] = {}
@@ -113,6 +136,15 @@ def main() -> None:
     for fig_num, status in results.items():
         marker = "SKIP" if status == "skipped" else ("OK  " if status is True else "FAIL")
         print(f"  Figure {fig_num}: {marker}")
+
+    # Sync freshly built figures into the submission bundle (main.tex reads from
+    # manuscript/Figures/). Only copy figures that built OK this run.
+    if SUBMISSION_FIGS_DIR.is_dir():
+        for name, status in results.items():
+            pdf = FIGURES_DIR / f"{name}.pdf"
+            if status is True and pdf.exists():
+                shutil.copyfile(pdf, SUBMISSION_FIGS_DIR / f"{name}.pdf")
+        print(f"\nSynced built figures -> {SUBMISSION_FIGS_DIR.relative_to(REPO_ROOT)}/")
 
     failed = [n for n, s in results.items() if s is False]
     if failed:
