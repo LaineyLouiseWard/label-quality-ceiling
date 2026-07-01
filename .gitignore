@@ -32,6 +32,8 @@ analysis/bootstrap_results.*
 analysis/seed_aggregate/
 .campaign/
 figures/*.pdf
+figures/*.png
+figures/graphical_abstract/
 artifacts/tile_number_metrics.json
 artifacts/sampler_weights.tsv
 

@@ -1,8 +1,8 @@
 # Figures
 
-Every manuscript figure is generated from a script in `scripts/figures/` or `scripts/analysis/`
-and written to `figures/`. Script and output names are descriptive and stable; the printed figure
-numbers are assigned by LaTeX, so the table below maps by content rather than by number.
+The manuscript uses fourteen figures. Each is generated from a script in `scripts/figures/`
+or `scripts/analysis/` and written to `figures/`. Script and output names are descriptive and
+stable; the printed figure numbers are assigned by LaTeX, so the table maps by content.
 
 ## Build
 
@@ -10,33 +10,37 @@ numbers are assigned by LaTeX, so the table below maps by content rather than by
 python scripts/figures/build_all_figures.py --device cuda
 ```
 
-This renders the core figure set into `figures/`. The TikZ figures are compiled with `pdflatex`
-and copied in; the matplotlib figures render directly and use `text.usetex` (Latin Modern /
-Computer Modern), so a LaTeX toolchain is required — see the figure prerequisites in
-[RUNBOOK.md](RUNBOOK.md), section E.
+This builds the twelve figures that render directly to `figures/`: it compiles the TikZ `.tex`
+figures with `pdflatex` and runs the matplotlib figures (which use `text.usetex`, Latin Modern /
+Computer Modern — a LaTeX toolchain is required; see [RUNBOOK.md](RUNBOOK.md), section E).
 
-The uncertainty and boundary figures are produced by their scripts under `scripts/analysis/`,
-because they depend on saved per-tile evaluation outputs rather than the raw imagery.
+The remaining two figures — the uncertainty overlay and the class-pair boundary matrix — are
+produced by their scripts under `scripts/analysis/`, because they depend on saved per-tile
+evaluation outputs. The figure PDFs are copied into the submission bundle (`manuscript/Figures/`),
+which is where the manuscript reads them.
 
 ## Map
 
 | Figure content | Source script | Output |
 |----------------|---------------|--------|
-| Staged pipeline / factorial design | `scripts/figures/workflow_pipeline.tex`, `factorial_design.tex` | `figures/workflow_pipeline.pdf`, `factorial_design.pdf` |
-| Two-axes mitigation schematic | `scripts/figures/mitigation_axes.tex` | `figures/mitigation_axes.pdf` |
-| OpenEarthMap ↔ Biodiversity taxonomy mapping | `scripts/figures/oem_mapping.tex` | `figures/oem_mapping.pdf` |
-| Study area | `scripts/figures/study_area.py` | `figures/study_area.pdf` |
-| Dataset class-distribution comparison | `scripts/figures/class_distributions.py` | `figures/class_distributions.pdf` |
-| Sampler example tiles | `scripts/figures/sampler_tiles.py` | `figures/sampler_tiles.pdf` |
-| Ablation qualitative comparison | `scripts/figures/ablation_qualitative.py` | `figures/ablation_qualitative.pdf` |
-| Confusion matrices | `scripts/figures/confusion_matrices.py` | `figures/confusion_matrices.pdf` |
-| Per-class factorial main effects | `scripts/figures/factorial_effects.py` | `figures/factorial_effects.pdf` |
-| Frequency vs difficulty | `scripts/figures/frequency_vs_difficulty.py` | `figures/frequency_vs_difficulty.pdf` |
-| Reliability / ECE | `scripts/figures/reliability_ece.py` | `figures/reliability_ece.pdf` |
-| Uncertainty quality | `scripts/figures/uncertainty_quality.py` | `figures/uncertainty_quality.pdf` |
-| Boundary-limited error | `scripts/figures/boundary_limited_error.py` | `figures/boundary_limited_error.pdf` |
-| Uncertainty overlay | `scripts/analysis/draft_boundary_overlay.py` | `figures/uncertainty_overlay.pdf` |
-| Class-pair boundary matrix | `scripts/analysis/class_pair_boundary.py` | `figures/class_pair_boundary.pdf` |
+| Staged pipeline | `scripts/figures/workflow_pipeline.tex` | `workflow_pipeline.pdf` |
+| Two-axes mitigation schematic | `scripts/figures/mitigation_axes.tex` | `mitigation_axes.pdf` |
+| OpenEarthMap ↔ Biodiversity taxonomy mapping | `scripts/figures/oem_mapping.tex` | `oem_mapping.pdf` |
+| Study area | `scripts/figures/study_area.py` | `study_area.pdf` |
+| Dataset class-distribution comparison | `scripts/figures/class_distributions.py` | `class_distributions.pdf` |
+| Ablation qualitative comparison | `scripts/figures/ablation_qualitative.py` | `ablation_qualitative.pdf` |
+| Confusion matrices | `scripts/figures/confusion_matrices.py` | `confusion_matrices.pdf` |
+| Per-class factorial main effects | `scripts/figures/factorial_effects.py` | `factorial_effects.pdf` |
+| Frequency vs difficulty | `scripts/figures/frequency_vs_difficulty.py` | `frequency_vs_difficulty.pdf` |
+| Reliability / ECE | `scripts/figures/reliability_ece.py` | `reliability_ece.pdf` |
+| Uncertainty quality | `scripts/figures/uncertainty_quality.py` | `uncertainty_quality.pdf` |
+| Boundary-limited error | `scripts/figures/boundary_limited_error.py` | `boundary_limited_error.pdf` |
+| Uncertainty overlay | `scripts/analysis/draft_boundary_overlay.py` | `uncertainty_overlay.pdf` |
+| Class-pair boundary matrix | `scripts/analysis/class_pair_boundary.py` | `class_pair_boundary.pdf` |
+
+The graphical abstract is built separately from `scripts/figures/graphical_abstract_panels.py`
+(three raster panels) and `graphical_abstract_tikz.tex` (assembly); the final image ships with the
+submission bundle.
 
 Per-figure inputs (data paths, checkpoints, evaluation outputs) are documented stage-by-stage in
 [RUNBOOK.md](RUNBOOK.md). Figures that draw on the proprietary Biodiversity imagery cannot be

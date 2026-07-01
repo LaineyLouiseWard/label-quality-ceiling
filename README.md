@@ -94,7 +94,7 @@ python scripts/figures/build_all_figures.py --device cuda
 Individual figures use descriptive script names (see [docs/FIGURES.md](docs/FIGURES.md) for the full map):
 
 ```bash
-python scripts/figures/rgb_tiles.py            # RGB Pléiades example tiles
+python scripts/figures/study_area.py           # study-area map
 python scripts/figures/class_distributions.py  # dataset class-distribution comparison
 python scripts/figures/confusion_matrices.py   # confusion matrices
 python scripts/figures/factorial_effects.py    # per-class factorial main effects
