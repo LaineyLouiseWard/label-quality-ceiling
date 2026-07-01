@@ -51,9 +51,12 @@ CLASS_NAMES_6 = [
 CLASS_NAMES_5 = CLASS_NAMES_6[1:]
 
 
-def build_model(num_classes: int = 6) -> torch.nn.Module:
-    """Instantiate the FT-UNetFormer architecture used in this repo."""
-    return ft_unetformer(num_classes=num_classes, decoder_channels=256)
+def build_model(num_classes: int = 6, in_chans: int = 3) -> torch.nn.Module:
+    """Instantiate the FT-UNetFormer architecture used in this repo.
+
+    in_chans=4 evaluates the RGB+NIR / RGB+elevation variants (4-channel patch-embed stem).
+    """
+    return ft_unetformer(num_classes=num_classes, decoder_channels=256, in_chans=in_chans)
 
 def load_checkpoint_into_model(
     model: torch.nn.Module, ckpt_path: Path, device: torch.device
@@ -169,8 +172,9 @@ def evaluate_checkpoint(
     tta: bool = False,
     tta_scales: tuple = (1.0,),
     tta_flips: str = "",
+    in_chans: int = 3,
 ) -> Tuple[dict, np.ndarray]:
-    model = build_model(num_classes=6).to(device)
+    model = build_model(num_classes=6, in_chans=in_chans).to(device)
     model = load_checkpoint_into_model(model, ckpt_path, device)
     model.eval()
 
@@ -308,6 +312,8 @@ def main() -> None:
     )
     ap.add_argument("--force", action="store_true",
                     help="Overwrite existing evaluation outputs without prompting.")
+    ap.add_argument("--in-chans", type=int, default=3,
+                    help="Model input channels (3=RGB default; 4 for RGB+NIR / RGB+elevation variants).")
     ap.add_argument("--tta", action="store_true",
                     help="Enable test-time augmentation (multi-scale + flips, softmax-averaged). "
                          "OFF by default — single-pass eval is unchanged. Use a separate --out-dir for TTA runs.")
@@ -364,6 +370,7 @@ def main() -> None:
             tta=args.tta,
             tta_scales=tta_scales,
             tta_flips=tta_flips,
+            in_chans=args.in_chans,
         )
 
         with open(run_dir / "metrics.json", "w", encoding="utf-8") as f:
