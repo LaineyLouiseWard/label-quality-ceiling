@@ -29,7 +29,7 @@ Per-site tile counts are counted from the raw tiles and equal the dataset split 
 (biodiversity 1553+204+195=1952; ireland1 54+4+6=64; ireland2 99+11+17=127; total 2143).
 
 Output:
-  figures/study_area.pdf (+ .png for QC), copied to docs/Submission/Figures/study_area.pdf
+  figures/study_area.pdf (+ .png for QC), copied to manuscript/Figures/study_area.pdf
 
 Computer Modern via text.usetex (mathtext-cm fallback), matching every other paper figure.
 """
@@ -287,7 +287,7 @@ def render(root: Path, out_dir: Path, use_tex: bool):
     plt.close(fig)
 
     # mirror into the submission tree
-    sub = root / "docs/Submission/Figures/study_area.pdf"
+    sub = root / "manuscript/Figures/study_area.pdf"
     if sub.parent.is_dir():
         shutil.copyfile(pdf, sub)
 

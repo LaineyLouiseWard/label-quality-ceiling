@@ -95,7 +95,7 @@ def main() -> None:
         # 2026-06-25 figure audit: figures now use stable DESCRIPTIVE names (decoupled from
         # printed numbers, which LaTeX assigns) so reordering during revision needs no renames.
         # The cut figures (clsbal weight histogram, recovered-vs-lost transitions, the three
-        # supplementary uncertainty figures) are archived under _archive/figures_cut/.
+        # supplementary uncertainty figures) were removed from the final figure set.
         # The paper's last three figures (boundary_distance, uncertainty_overlay,
         # class_pair_boundary) are produced by scripts/analysis/* and copied in, not built here.
         ("factorial_design",    lambda: run_tex(SCRIPTS_DIR / "factorial_design.tex")),

@@ -1,4 +1,4 @@
-> **Current state 2026-06-22 — clean 3-stage pipeline.** Stage-3 sampler = **clsbal** (A0 `stage3_sampler`/`sampler_weights.tsv` retired); **Stage 3 (clsbal) is the final shipped model.** Stage-4 knowledge distillation (and self-distillation) was **dropped** — its code is archived under `_archive/kd_selfdistil/`; the "soft-label split under KD" is **not** a current novel element. Authoritative: `docs/PAPER_CONTRIBUTIONS.md`, `docs/SELFDISTIL_VERDICT_2026-06-22.md`, `docs/METHODOLOGY_FINDINGS_2026-06-21.md`.
+> **Pipeline: clean 3-stage.** Stage 3 (clsbal — class-balanced frequency-only sampling, Kang et al. 2020) is the final shipped model. Stage-4 knowledge distillation and self-distillation were tested and dropped as a negative result (distillation underperformed a step-matched control that trained for the same extra steps without it). See [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md) for the design decisions and negative results.
 
 # Reproducibility Runbook
 
@@ -14,11 +14,11 @@ The ablation is **3-stage and replication-free**:
 | 3 | Class-balanced sampler (clsbal, Kang 2020) — **final shipped model** | `stage3_clsbal.py` |
 
 Stage 3 (clsbal) is the terminal, deployed model. Stage-4 knowledge distillation was **dropped**
-(its code is archived under `_archive/kd_selfdistil/`); see `docs/SELFDISTIL_VERDICT_2026-06-22.md`.
+as a documented negative result; see [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md).
 
 The OEM teacher is still **built upstream** of the student lineage, because the OEM→student relabel
 mappings are *derived from the teacher's measured confusion* (teacher → confusion → grounded relabel
-→ student). See `docs/KD_MAPPING_GROUNDING.md`.
+→ student). See [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md).
 
 All commands assume you are in the repository root with the `ClassImbalance` conda environment active.
 
@@ -269,28 +269,19 @@ Computer Modern / LaTeX font): the TikZ figures (1, 2, the mapping schematic, th
 `pdflatex`, and the Python figures (3–11) use matplotlib `text.usetex=True`. Install (Debian/Ubuntu):
 `texlive-latex-base texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra cm-super lmodern dvipng`
 (`lmodern` gives Type-1 vector fonts; `cm-super`+`dvipng` are required by matplotlib's usetex). Verify:
-`pdffonts figures/Figure05.pdf` should list only `LMRoman`/`LMMath…`, all Type 1.
+`pdffonts figures/class_distributions.pdf` should list only `LMRoman`/`LMMath…`, all Type 1.
 
 ```bash
 python scripts/figures/build_all_figures.py --device cuda
 ```
 
-| Fig | Command | Key dependency |
-|-----|---------|----------------|
-| 1 | `pdflatex scripts/figures/Figure01.tex` (staged pipeline flowchart, TikZ) | — |
-| 2 | `pdflatex scripts/figures/Figure02.tex` (two-axes mitigation schematic, TikZ) | — |
-| 3 | `python scripts/figures/Figure03.py` | `data/biodiversity_raw/` |
-| 4 | `python scripts/figures/Figure04.py` (OpenEarthMap taxonomy-harmonisation example) | `data/openearthmap_raw/`, `data/openearthmap_relabelled/` |
-| 5 | `python scripts/figures/Figure05.py` (dataset class-distribution comparison) | `data/biodiversity_raw/masks/`, `data/openearthmap_filtered/masks/` |
-| 6 | `python scripts/figures/Figure06.py` (class-balanced (clsbal) sampling-weight distribution) | `artifacts/sampler_weights_clsbal.tsv` |
-| 7 | `python scripts/figures/Figure07.py` (low/high-weight example tiles) | `artifacts/sampler_weights_clsbal.tsv`, Stage 2b ckpt |
-| 8 | `python scripts/figures/Figure08.py` (3-stage qualitative comparison) | All stage checkpoints, `data/biodiversity_split/val/` |
-| 9 | `python scripts/figures/Figure09.py` | `evaluation/evaluation_results/val/` (confusion matrices) |
-| 10 | `python scripts/figures/Figure10.py` | `evaluation/evaluation_results/val/` (metrics.json) |
-| 11 | `python scripts/figures/Figure11.py` | Stage 1 + Stage 3 (clsbal) checkpoints, `data/biodiversity_split/val/` |
+Figures use stable descriptive script names (rather than figure numbers, which LaTeX assigns).
+`build_all_figures.py` renders the core set into `figures/`: it compiles the TikZ `.tex` figures
+with `pdflatex` and copies them in, and runs the matplotlib figures directly. The uncertainty and
+boundary figures are produced by their scripts under `scripts/analysis/`.
 
-(For Figures 1–2, `build_all_figures.py` compiles the `.tex` and copies the PDF into `figures/`.)
-All outputs go to `figures/`. See `docs/FIGURE_MAP.md` for full per-figure dependency lists.
+See [docs/FIGURES.md](docs/FIGURES.md) for the full figure → source-script → output-file map and
+per-figure dependencies. All outputs go to `figures/`.
 
 ---
 

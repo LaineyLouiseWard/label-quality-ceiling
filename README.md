@@ -91,19 +91,17 @@ All figures from repo root:
 python scripts/figures/build_all_figures.py --device cuda
 ```
 
-Individual figures:
+Individual figures use descriptive script names (see [docs/FIGURES.md](docs/FIGURES.md) for the full map):
 
 ```bash
-python scripts/figures/Figure03.py          # RGB tile examples (data only)
-python scripts/figures/Figure04.py          # OpenEarthMap taxonomy-harmonisation example (data only)
-python scripts/figures/Figure09.py          # Confusion matrices (artifacts only)
-python scripts/figures/Figure10.py          # Per-class IoU (metrics only)
-python scripts/figures/Figure11.py          # Pixel-level transitions (baseline vs final)
+python scripts/figures/rgb_tiles.py            # RGB Pléiades example tiles
+python scripts/figures/class_distributions.py  # dataset class-distribution comparison
+python scripts/figures/confusion_matrices.py   # confusion matrices
+python scripts/figures/factorial_effects.py    # per-class factorial main effects
 ```
 
-Figures 1 (staged-pipeline flowchart) and 2 (two-axes mitigation schematic) are TikZ,
-compiled from `scripts/figures/Figure01.tex` and `Figure02.tex` to `figures/`
-(`build_all_figures.py` does this automatically).
+The pipeline/factorial-design and two-axes mitigation schematics are TikZ, compiled from their
+`.tex` sources in `scripts/figures/` to `figures/` by `build_all_figures.py`.
 
 ---
 

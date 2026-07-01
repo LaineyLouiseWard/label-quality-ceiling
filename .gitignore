@@ -5,7 +5,6 @@ data/
 pretrain_weights/
 model_weights/
 bin/
-docs/
 sonic/
 
 # --------------------
@@ -54,15 +53,25 @@ __pycache__/
 *.egg-info/
 
 # --------------------
-# Manuscript
+# Private working notes — never published
 # --------------------
+notes/
+
+# --------------------
+# Manuscript — gitignored during submission. After publication, delete the
+# `manuscript/` line to publish it, but keep manuscript/Definitions/ ignored
+# (MDPI-copyrighted class files).
+# --------------------
+manuscript/
 main_proposed.tex
 
 # --------------------
-# Claude Code
+# LaTeX build artifacts
 # --------------------
-CLAUDE.md
-.claude/
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
 
 # --------------------
 # Editor
