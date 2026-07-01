@@ -108,11 +108,12 @@ def curves(n_hist, e_hist, n_pts=101):
 
 def render(root, out_dir, seeds, use_tex):
     setup_font(use_tex)
-    sr, md, cell = "sonic/results", "data/biodiversity_split/val/masks", "stage1_baseline"
+    sr, md, cell = "sonic/results", "data/biodiversity_split/val/masks", "stage3_clsbal"
     n_hist, e_hist, n = sparsification(root, sr, md, cell, seeds)
     f, unc, oracle, random, ause, base_err = curves(n_hist, e_hist)
+    print(f"[uncertainty_quality] cell={cell}  AUSE={ause:.4f}")
 
-    st = json.load(open(root / "analysis/label_ceiling/stats_stage1_baseline.json"))
+    st = json.load(open(root / "analysis/label_ceiling/stats_stage3_clsbal.json"))
     dc = st["distance_curve_foreground"]
     em = [e for e in dc["edges_m"] if np.isfinite(e)]
     cen = [(a + b) / 2 for a, b in zip(em[:-1], em[1:])] + [em[-1] * 1.4]

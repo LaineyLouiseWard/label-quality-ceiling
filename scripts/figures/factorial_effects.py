@@ -10,7 +10,7 @@ seeds, on a shared signed percentage-point axis with a bold zero reference line:
 
   * OEM transfer main effect       = mean[ (transfer-only - baseline) + (full - sampler-only) ] / 2
   * clsbal sampler main effect     = mean[ (sampler-only - baseline) + (full - transfer-only) ] / 2
-  * transfer x sampler interaction = (full - sampler-only) - (transfer-only - baseline)
+  * transfer x sampler interaction = [ (full - sampler-only) - (transfer-only - baseline) ] / 2
 
 This is the faithful encoding of the factorial design: the result IS the paired contrasts
 (transfer dominant and positive on every class; sampler a rare-class-for-cropland trade-off;
@@ -117,7 +117,7 @@ def factorial_effects(D, metric_csv, cls):
     return {
         "OEM transfer": paired_ci(((t - b) + (f - sa)) / 2),
         "clsbal sampler": paired_ci(((sa - b) + (f - t)) / 2),
-        "Transfer $\\times$ sampler": paired_ci((f - sa) - (t - b)),
+        "Transfer $\\times$ sampler": paired_ci(((f - sa) - (t - b)) / 2),
     }, len(seeds)
 
 

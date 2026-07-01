@@ -205,7 +205,7 @@ def render(root, out_dir, cell, use_tex):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cell", default="stage1_baseline")
+    ap.add_argument("--cell", default="stage3_clsbal")
     ap.add_argument("--out-dir", default="figures")
     ap.add_argument("--no-tex", action="store_true")
     args = ap.parse_args()
