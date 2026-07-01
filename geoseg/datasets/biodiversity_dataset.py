@@ -72,16 +72,18 @@ def _read_tif_as_rgb_uint8(path: str) -> Image.Image:
             data = np.where(np.isnan(data), 0, data)
             data = _normalize_percentile(data)
             data = (data * 255).clip(0, 255).astype(np.uint8)
-            if data.shape[2] >= 3:
-                data = data[:, :, :3]
+            if data.shape[2] >= 4:
+                data = data[:, :, :4]
+            elif data.shape[2] == 3:
+                # RGB-only tile (e.g. OEM): duplicate Red into the NIR slot so the array stays 4-ch
+                data = np.concatenate([data, data[:, :, 0:1]], axis=2)
             else:
-                data = np.repeat(data, 3, axis=2)
-            return Image.fromarray(data)
+                data = np.repeat(data[:, :, :1], 4, axis=2)
+            return Image.fromarray(data)   # 4-ch -> PIL mode 'RGBA' (bands carried as data, not alpha)
 
-    img = Image.open(path)
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    return img
+    # RGB+NIR variant: rasterio is mandatory. The PIL fallback cannot recover the NIR band, and a
+    # silent 3-ch image would crash the 4-ch stem mid-epoch; fail loudly at read time instead.
+    raise RuntimeError(f"rasterio is required to read 4-band (RGB+NIR) tiles: {path}")
 
 
 # -----------------------------------------------------------------------------
@@ -94,13 +96,21 @@ def _train_tf():
             albu.HorizontalFlip(p=0.5),
             albu.VerticalFlip(p=0.5),
             albu.RandomBrightnessContrast(0.25, 0.25, p=0.25),
-            albu.Normalize(),
+            albu.Normalize(
+                mean=(0.485, 0.456, 0.406, 0.585),
+                std=(0.229, 0.224, 0.225, 0.273),
+                max_pixel_value=255.0,
+            ),
         ]
     )
 
 
 def _val_tf():
-    return albu.Compose([albu.Normalize()])
+    return albu.Compose([albu.Normalize(
+        mean=(0.485, 0.456, 0.406, 0.585),
+        std=(0.229, 0.224, 0.225, 0.273),
+        max_pixel_value=255.0,
+    )])
 
 
 # -----------------------------------------------------------------------------
@@ -403,7 +413,7 @@ class _BiodiversitySegDataset(Dataset):
         cy = int(np.random.randint(H // 4, H - H // 4 + 1))
         quad = [(cy, cx), (cy, W - cx), (H - cy, cx), (H - cy, W - cx)]  # (h, w) per pane
         pos = [(0, 0), (0, cx), (cy, 0), (cy, cx)]                       # top-left (row, col)
-        img_canvas = np.zeros((H, W, 3), dtype=np.uint8)
+        img_canvas = np.zeros((H, W, 4), dtype=np.uint8)   # 4-ch (RGB+NIR); mosaic OFF by default anyway
         mask_canvas = np.zeros((H, W), dtype=np.uint8)
         for k in range(4):
             ip, mp = self._load_pil(idxs[k])

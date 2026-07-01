@@ -945,11 +945,12 @@ class FTUNetFormer(nn.Module):
                  num_heads=(3, 6, 12, 24),
                  freeze_stages=-1,
                  window_size=8,
-                 num_classes=6
+                 num_classes=6,
+                 in_chans=3
                  ):
         super().__init__()
 
-        self.backbone = SwinTransformer(embed_dim=embed_dim, depths=depths, num_heads=num_heads, frozen_stages=freeze_stages)
+        self.backbone = SwinTransformer(embed_dim=embed_dim, depths=depths, num_heads=num_heads, frozen_stages=freeze_stages, in_chans=in_chans)
         encoder_channels = [embed_dim, embed_dim*2, embed_dim*4, embed_dim*8]
         self.decoder = Decoder(encoder_channels, decode_channels, dropout, window_size, num_classes)
 
@@ -961,17 +962,35 @@ class FTUNetFormer(nn.Module):
 
 
 def ft_unetformer(pretrained=False, num_classes=6, freeze_stages=-1, decoder_channels=256,
-                  weight_path='pretrain_weights/stseg_base.pth'):
+                  weight_path='pretrain_weights/stseg_base.pth', in_chans=3):
     model = FTUNetFormer(num_classes=num_classes,
                          freeze_stages=freeze_stages,
                          embed_dim=128,
                          depths=(2, 2, 18, 2),
                          num_heads=(4, 8, 16, 32),
-                         decode_channels=decoder_channels)
+                         decode_channels=decoder_channels,
+                         in_chans=in_chans)
 
     if pretrained and weight_path is not None:
         old_dict = torch.load(weight_path)['state_dict']
         model_dict = model.state_dict()
+
+        # RGB+NIR (>3-ch) support: inflate the ADE20K 3-channel patch-embed conv.
+        # Loader order is RGB (ch0=Red); seed the new NIR channel (idx 3) by COPYING the RED filter
+        # (red is the visible band spectrally closest to NIR). Keeps the pretrained R/G/B filters and
+        # gives NIR a meaningful edge/texture prior (timm in_chans default; Pan et al. 2019, CoinNet).
+        # Caveat: copying red ~doubles the summed response on NIR~=Red inputs at step 0 (Carreira &
+        # Zisserman 2017, I3D); we fine-tune end-to-end from this stem so the drift is reabsorbed.
+        pw_key = 'backbone.patch_embed.proj.weight'
+        if pw_key in old_dict and pw_key in model_dict:
+            w_old = old_dict[pw_key]                     # [embed, 3, 4, 4]
+            w_new = model_dict[pw_key]                   # [embed, in_chans, 4, 4]
+            if w_old.shape[1] != w_new.shape[1]:
+                assert w_new.shape[1] == 4 and w_old.shape[1] == 3, \
+                    f"unexpected in_chans expansion {tuple(w_old.shape)}->{tuple(w_new.shape)}"
+                nir = w_old[:, 0:1, :, :]                # RED filter -> NIR seed (keep channel axis)
+                old_dict[pw_key] = torch.cat([w_old, nir], dim=1)  # [embed, 4, 4, 4]
+
         old_dict = {k: v for k, v in old_dict.items() if (k in model_dict)}
         model_dict.update(old_dict)
         model.load_state_dict(model_dict)
