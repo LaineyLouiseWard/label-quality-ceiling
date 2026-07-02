@@ -92,3 +92,6 @@ config/biodiversity/_archive/
 # Regenerable analysis outputs (drafts, stale KD, imagery-derived previews) — not shared
 analysis/
 evaluation/bakeoff_gates/
+
+# Archived cut-figure outputs (kept locally, out of git)
+_archive/
