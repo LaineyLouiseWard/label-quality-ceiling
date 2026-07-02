@@ -1,4 +1,4 @@
-# Diagnosing a Label-Quality Ceiling in Imbalanced High-Resolution Rural Land-Cover Segmentation
+# Diagnosing a Label-Quality Ceiling in Imbalanced Rural Land-Cover Segmentation
 
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![PyTorch 2.9](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
@@ -8,7 +8,7 @@
 
 ![Graphical abstract: satellite imagery, the FT-UNetFormer segmentation map, and the boundary-localised residual error that points to a label-quality ceiling.](assets/graphical_abstract.png)
 
-Code accompanying the manuscript *Diagnosing a Label-Quality Ceiling in Imbalanced High-Resolution Rural Land-Cover Segmentation*.
+Code accompanying the manuscript *Diagnosing a Label-Quality Ceiling in Imbalanced Rural Land-Cover Segmentation*.
 Using high-resolution Pléiades satellite imagery and a fixed FT-UNetFormer, two off-the-shelf data-curation levers
 (cross-dataset transfer from OpenEarthMap, taxonomy-harmonised, and a class-balanced sampler) are evaluated in a
 2×2 factorial over ten seeds. Cross-dataset transfer is the dominant lever and improves every class on validation, while the
