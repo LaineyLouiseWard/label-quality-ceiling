@@ -25,7 +25,7 @@ shell script (`RUNBOOK.sh`) reproduces all results end-to-end from raw data.
 
 ```bash
 conda env create -f environment.yaml
-conda activate ClassImbalance
+conda activate label-quality-ceiling
 ```
 
 For a complete walkthrough covering data preparation, training, evaluation,

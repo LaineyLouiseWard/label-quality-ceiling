@@ -1,4 +1,4 @@
-name: ClassImbalance
+name: label-quality-ceiling
 channels:
   - defaults
   - conda-forge

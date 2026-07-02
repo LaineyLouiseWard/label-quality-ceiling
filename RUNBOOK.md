@@ -20,11 +20,11 @@ The OEM teacher is still **built upstream** of the student lineage, because the 
 mappings are *derived from the teacher's measured confusion* (teacher → confusion → grounded relabel
 → student). See [docs/DESIGN_NOTES.md](docs/DESIGN_NOTES.md).
 
-All commands assume you are in the repository root with the `ClassImbalance` conda environment active.
+All commands assume you are in the repository root with the `label-quality-ceiling` conda environment active.
 
 ```bash
 conda env create -f environment.yaml
-conda activate ClassImbalance
+conda activate label-quality-ceiling
 ```
 
 ---
