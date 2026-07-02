@@ -81,6 +81,10 @@
   \end{scope}
   \draw[white, opacity=0.5, line width=0.7pt] (\ax,0) rectangle (\ax+\panelW,\panelW);
   \node[ptitle] at (\ax+\mid,\pcap+0.14) {Satellite imagery};
+  % imagery copyright credit (Airbus EULA Art. 2.2.1, conspicuously displayed);
+  % same badge style/shade as panels 2-3, top-left corner for consistency
+  \node[badge, anchor=north west, font=\tiny] at (\ax+0.15,\panelW-0.15)
+      {\textcopyright{} CNES 2021, Distribution Airbus DS};
 
   % ======================================================================
   % PANEL 2 - the model's segmentation map

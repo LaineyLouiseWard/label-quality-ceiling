@@ -1,4 +1,4 @@
-# Addressing Severe Class Imbalance in Rural Image Segmentation
+# A Label-Quality Ceiling in Imbalanced High-Resolution Rural Land-Cover Segmentation
 
 ![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![PyTorch 2.9](https://img.shields.io/badge/PyTorch-2.9-EE4C2C?logo=pytorch&logoColor=white)
@@ -6,9 +6,14 @@
 ![Rasterio](https://img.shields.io/badge/Rasterio-1.4-green)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
 
-Code accompanying the manuscript *Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer* — a cumulative
-3-stage ablation that pairs cross-dataset transfer (OpenEarthMap pre-training, taxonomy-harmonised)
-with class-balanced sampling on high-resolution Pléiades satellite imagery, using FT-UNetFormer.
+![Graphical abstract: satellite imagery, the FT-UNetFormer segmentation map, and the boundary-localised residual error that points to a label-quality ceiling.](assets/graphical_abstract.png)
+
+Code accompanying the manuscript *A Label-Quality Ceiling in Imbalanced High-Resolution Rural Land-Cover Segmentation*.
+Using high-resolution Pléiades satellite imagery and a fixed FT-UNetFormer, two off-the-shelf data-curation levers
+(cross-dataset transfer from OpenEarthMap, taxonomy-harmonised, and a class-balanced sampler) are evaluated in a
+2×2 factorial over ten seeds. Cross-dataset transfer is the dominant lever and improves every class, while the
+class-balanced sampler is largely redundant once transfer is applied. The residual error is diagnosed as a
+label-ambiguity ceiling concentrated at class boundaries, rather than a limit of model capacity or the imbalance method.
 
 This repository contains the complete training pipeline, evaluation scripts,
 supplementary analyses, and figure generation used in the manuscript. A single
@@ -40,10 +45,10 @@ bash RUNBOOK.sh --from C1      # resume from evaluation onward
 ```
 
 Individual stages (3-stage, replication-free; teacher is built upstream to ground the
-OEM→student mapping — see `RUNBOOK.md`):
+OEM→student mapping, see `RUNBOOK.md`):
 
 ```bash
-# Teacher (built once, fixed across seeds) — grounds the OEM->student taxonomy mapping:
+# Teacher (built once, fixed across seeds). Grounds the OEM->student taxonomy mapping:
 PYTHONPATH=. python -m train.train_teacher -c config/teacher/unet_oem.py
 PYTHONPATH=. python -m scripts.data_prep.export_teacher_checkpoint \
   --ckpt model_weights/teacher/teacher.ckpt \
@@ -72,7 +77,7 @@ PYTHONPATH=. python evaluation/compute_metrics.py \
   --base-dir model_weights/biodiversity \
   --data-root data/biodiversity_split/val
 
-# Held-out test set (final model only — Stage 3 clsbal; add --tta for the reported TTA number):
+# Held-out test set (final model only, Stage 3 clsbal; add --tta for the reported TTA number):
 PYTHONPATH=. python evaluation/compute_metrics.py \
   --split test \
   --base-dir model_weights/biodiversity/stage3_clsbal \
@@ -107,7 +112,7 @@ The pipeline/factorial-design and two-axes mitigation schematics are TikZ, compi
 
 ## Supplementary analyses
 
-All derived from saved evaluation outputs and sampling artefacts — no retraining required.
+All derived from saved evaluation outputs and sampling artefacts; no retraining required.
 Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce
 robustness analyses A1–A6 (minority recall, symmetric confusion, weight uplift, val–test gap,
 majority stability, Gini coefficient).
@@ -141,10 +146,14 @@ Users with licensed access should place files as follows:
 
 ## Manuscript reproducibility
 
-- Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce A1–A6 from saved evaluation outputs and sampling artefacts — no retraining required.
+- Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce A1–A6 from saved evaluation outputs and sampling artefacts; no retraining required.
 - Data preparation scripts (split, filter, relabel, combine, build clsbal sampler weights, export teacher checkpoint) are in `scripts/data_prep/`.
 
 ---
+
+## Acknowledgements
+
+The FT-UNetFormer implementation derives from ODOS Technologies' [GeoSeg-Biodiversity](https://github.com/odostech/GeoSeg-Biodiversity). The proprietary Biodiversity dataset was provided by ODOS Technologies under licence. The underlying Pléiades satellite imagery is © CNES 2021, distribution Airbus DS; it is proprietary and is not distributed in this repository, which shares only code and imagery-free derived outputs.
 
 ## Citation
 

@@ -146,8 +146,9 @@ def render(root, out_dir, seeds, use_tex):
     axB.legend(loc="upper right", frameon=False)
     axB.grid(True, ls=":", lw=0.5, color="#cccccc"); axB.set_axisbelow(True)
     epi_frac = float(mi.sum() / tot.sum())
-    axB.text(0.04, 0.05, (rf"epistemic share $\approx$ {epi_frac:.0%}" if use_tex
-                          else f"epistemic share ~ {epi_frac:.0%}"),
+    epi_band = float(mi[0] / tot[0])  # boundary-band share; matches caption/body (5.7%)
+    axB.text(0.04, 0.05, (rf"epistemic share $\approx$ {epi_band * 100:.1f}\%" if use_tex
+                          else f"epistemic share ~ {epi_band:.1%}"),
              transform=axB.transAxes, fontsize=11, color="#555555")
 
     fig.tight_layout()
