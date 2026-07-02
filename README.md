@@ -11,7 +11,7 @@
 Code accompanying the manuscript *Diagnosing a Label-Quality Ceiling in Imbalanced High-Resolution Rural Land-Cover Segmentation*.
 Using high-resolution Pléiades satellite imagery and a fixed FT-UNetFormer, two off-the-shelf data-curation levers
 (cross-dataset transfer from OpenEarthMap, taxonomy-harmonised, and a class-balanced sampler) are evaluated in a
-2×2 factorial over ten seeds. Cross-dataset transfer is the dominant lever and improves every class, while the
+2×2 factorial over ten seeds. Cross-dataset transfer is the dominant lever and improves every class on validation, while the
 class-balanced sampler is largely redundant once transfer is applied. The residual error is diagnosed as a
 label-ambiguity ceiling concentrated at class boundaries, rather than a limit of model capacity or the imbalance method.
 
