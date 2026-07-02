@@ -148,6 +148,7 @@ Users with licensed access should place files as follows:
 
 - Scripts in `scripts/analysis/` (`a1_minority_recall.py` through `a6_weight_gini.py`) reproduce A1–A6 from saved evaluation outputs and sampling artefacts; no retraining required.
 - Data preparation scripts (split, filter, relabel, combine, build clsbal sampler weights, export teacher checkpoint) are in `scripts/data_prep/`.
+- The RGB+NIR 4-channel ablation (the near-infrared null result discussed in the paper) is kept on the `experiment/rgb-nir` branch: `config/biodiversity/stage3_clsbal_rgbnir.py` with 4-channel support in the dataset and model. It is held on a branch rather than `main` because the 4-channel data path is not backward-compatible with the RGB pipeline used for the reported results.
 
 ---
 
