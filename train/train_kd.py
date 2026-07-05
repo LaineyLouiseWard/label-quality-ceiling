@@ -1,6 +1,6 @@
 """
-RETIRED — knowledge distillation was DROPPED (rigorous negative result; see
-docs/SELFDISTIL_VERDICT_2026-06-22.md). Kept for the Discussion's negative result + reproducibility,
+RETIRED — knowledge distillation was DROPPED (rigorous negative result). Kept for the
+Discussion's negative result + reproducibility,
 NOT part of the current 2x2 factorial pipeline.
 
 Knowledge Distillation (KD) training script (Stage 5).
@@ -75,7 +75,7 @@ class KDTrain(pl.LightningModule):
         # NOTE: torch.compile of the student is applied in main() AFTER the pretrained
         # (Stage 4) weights are loaded. Compiling here prefixes params with "_orig_mod." so
         # the un-prefixed checkpoint would silently fail to load and the student would train
-        # from random init. Teacher is never compiled. See main() and docs/TORCH_COMPILE_SPEEDUP_TODO.md.
+        # from random init. Teacher is never compiled. See main().
         self.loss = config.loss
         self.classes = config.classes
 

@@ -9,7 +9,7 @@ not interior (capacity) failure. Three panels, one cell (baseline):
   (a) Trimap IoU recovery.  Per-class IoU re-scored while excluding a widening band
       around GROUND-TRUTH class boundaries. IoU climbs steeply then plateaus -> the
       error lives in the boundary shell. Per-seed mean over 10 seeds (+/-1 SD band),
-      NOT the ensemble argmax (PLOT_PLAN FLAG-1). Single-label analogue of Ortiz et
+      NOT the ensemble argmax. Single-label analogue of Ortiz et
       al. (2025) BS_gamma_beta recovery.
 
   (b) Error vs distance-to-boundary.  Foreground misclassification rate vs distance to
@@ -89,12 +89,12 @@ def setup_font(use_tex: bool):
     rc = {
         "font.family": "serif",
         "font.serif": ["Computer Modern Roman"],
-        "axes.labelsize": 13,
-        "font.size": 12,
+        "axes.labelsize": 14,
+        "font.size": 13,
         "axes.titlesize": 14,
-        "legend.fontsize": 12,
-        "xtick.labelsize": 11,
-        "ytick.labelsize": 11,
+        "legend.fontsize": 13,
+        "xtick.labelsize": 12.5,
+        "ytick.labelsize": 12.5,
         "axes.axisbelow": True,
         "figure.dpi": 150,
     }
@@ -161,8 +161,6 @@ def panel_interior_floor(ax, bvi, use_tex):
     cols = [col(n) for n in names]
     ax.bar(x - w / 2, bnd, w, color=cols, edgecolor="black", lw=0.6)
     ax.bar(x + w / 2, inr, w, color=cols, edgecolor="black", lw=0.6, alpha=0.4, hatch="///")
-    for xi, v in zip(x, inr):
-        ax.annotate(f"{v:.2f}", (xi + w / 2, v + 0.015), ha="center", fontsize=11, color="#333333")
     ax.set_xticks(x)
     ax.set_xticklabels([SHORT[n] for n in names], rotation=30, ha="right")
     ax.set_ylabel("misclassification rate")
@@ -174,7 +172,7 @@ def panel_interior_floor(ax, bvi, use_tex):
     ilab = (rf"interior ($>{imin:g}$\,m)" if use_tex else f"interior (>{imin:g} m)")
     handles = [Patch(facecolor="#999999", edgecolor="black", label=blab),
                Patch(facecolor="#999999", edgecolor="black", alpha=0.4, hatch="///", label=ilab)]
-    ax.legend(handles=handles, loc="upper right", frameon=False)
+    ax.legend(handles=handles, loc="upper center", frameon=False)
 
 
 def render(root, out_dir, cell, use_tex):

@@ -244,10 +244,10 @@ def render_figure(count, mean_total, mean_mi, out_dir, cell, use_tex=True):
     rc = {
         "font.family": "serif",
         "font.serif": ["Computer Modern Roman"],
-        "axes.labelsize": 13,
-        "font.size": 12,
-        "xtick.labelsize": 11.5,
-        "ytick.labelsize": 11.5,
+        "axes.labelsize": 14,
+        "font.size": 13,
+        "xtick.labelsize": 12.5,
+        "ytick.labelsize": 12.5,
         "axes.titlesize": 14,
         "figure.dpi": 150,
     }

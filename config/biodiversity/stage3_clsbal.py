@@ -67,7 +67,7 @@ gpus = "auto"
 # the SAME stage2a checkpoint, differing only in the sampler — mirroring the from-scratch (baseline vs
 # sampler-only) row. Previously stage3 inited from stage2b, giving the +sampler cell a SECOND 45-ep finetune
 # (90 Bio epochs vs 45), which confounded the sampler effect with extra epochs (a +45-ep cycle alone buys
-# ~+1.4 mIoU / +4.5 Semi-natural — see docs/SELFDISTIL_VERDICT_2026-06-22.md). See docs/REPRO_AUDIT / ablation audit.
+# ~+1.4 mIoU / +4.5 Semi-natural).
 pretrained_ckpt_path = (
     "model_weights/biodiversity/stage2a_oem_pretrain/stage2a_oem_pretrain.ckpt"
 )

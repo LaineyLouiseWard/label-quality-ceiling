@@ -3,7 +3,7 @@
 # Reproducibility Runbook
 
 From-scratch instructions for reproducing all results in the manuscript
-*Addressing Severe Class Imbalance in Rural Image Segmentation through Data Curation and Cross-Dataset Knowledge Transfer*.
+*Diagnosing a Label-Quality Ceiling in Imbalanced Rural Land-Cover Segmentation*.
 
 The ablation is **3-stage and replication-free**:
 

@@ -57,7 +57,7 @@ OEM_NATIVE_CLASSES = (
 # ---------------------------------------------------------------------------
 # OEM native index -> student index for PRE-TRAINING (hard labels). Table 1, pre-training column.
 # GROUNDED (2026-06-17): argmax of the teacher's empirical OEM->target confusion on the TRAINING set
-# (scripts/analysis/teacher_oem_to_gt_confusion.py; docs/KD_MAPPING_GROUNDING.md). Replaces the original
+# (scripts/analysis/teacher_oem_to_gt_confusion.py). Replaces the original
 # name-based hand-map, which mis-routed the teacher's domain-confused classes (Irish "Agriculture" is
 # pasture = Grassland, not Cropland; teacher "Water"/"Bareland" land on vegetation, not Background).
 # Consistent BY CONSTRUCTION with the KD column (= the full soft confusion): pretrain = argmax(confusion),

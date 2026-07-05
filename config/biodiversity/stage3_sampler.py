@@ -45,7 +45,7 @@ ignore_index = 0
 train_batch_size = 2
 val_batch_size = 2
 
-lr = 3e-4  # proven LR; 1e-4 was empirically too slow for the sampler's distribution shift. See docs/MANUSCRIPT_IMPLICATIONS_NOREP.md §14
+lr = 3e-4  # proven LR; 1e-4 was empirically too slow for the sampler's distribution shift.
 weight_decay = 2.5e-4
 backbone_lr = 3e-5  # 10x ratio kept
 backbone_weight_decay = 2.5e-4
@@ -176,7 +176,6 @@ sampler = WeightedRandomSampler(
     # the per-epoch gradient-step count. (2646 = the size of the former replicated training set,
     # 1846 base tiles + 800 minority replicas; replication is gone, but the value is retained purely
     # as a constant step budget so all four sampler arms are comparable.)
-    # See docs/CROSSCHECK_REVIEW_2026-06-14.md (nuance N5).
     num_samples=2646,
     replacement=True,
 )
@@ -224,7 +223,6 @@ optimizer = Lookahead(base_optimizer)
 # whereas monotone cosine is the standard, no-questions default for fine-tuning from a strong init.
 # The earlier "0.750 (cosine) vs 0.814 (warm restart)" gap was an ARTEFACT, not a schedule effect:
 # both 0.750 runs trained from random init (torch.compile renamed keys before the Stage 2b load).
-# See docs/MANUSCRIPT_IMPLICATIONS_NOREP.md §14.
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer, T_max=max_epoch, eta_min=0
 )

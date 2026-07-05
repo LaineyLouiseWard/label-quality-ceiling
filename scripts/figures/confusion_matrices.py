@@ -34,7 +34,7 @@ if str(repo_root) not in sys.path:
 # 10-seed confusion: read the CANONICAL summed 6x6 count confusion recomputed on the clean
 # 219-tile Irish val set (eval_on_dumps_219.py), then (in main) drop Background and
 # row-normalise. NOT the Sonic seed*/val/<cell>/confusion_matrix.npy artefacts -- those were
-# scored on 231 tiles (12 foreign tiles with no Irish mask). See PLOT_PLAN D.4b.
+# scored on 231 tiles (12 foreign tiles with no Irish mask).
 EVAL_DIR = repo_root / "analysis/eval_219"
 CELL_BASELINE = "stage1_baseline"
 CELL_FULL = "stage3_clsbal"
@@ -169,7 +169,7 @@ def main():
     # annotation breathing room.
     fig = plt.figure(figsize=(12.5, 5.3), dpi=300)
     gs = fig.add_gridspec(
-        1, 5, width_ratios=[1.1, 1.1, 0.05, 1.1, 0.05], wspace=0.55
+        1, 5, width_ratios=[1.1, 1.1, 0.05, 1.1, 0.05], wspace=0.30
     )
 
     ax1 = fig.add_subplot(gs[0, 0])
@@ -197,6 +197,7 @@ def main():
     cax2 = fig.add_subplot(gs[0, 4])
     cbar2 = fig.colorbar(im4, cax=cax2)
     cbar2.ax.tick_params(labelsize=12)
+    cax2.yaxis.set_ticks_position("left")   # ticks face panel (c), matching the shared colourbar on (b)
 
     # --- shrink colorbar heights (same style as the original fig) ---
     for cx in (cax, cax2):

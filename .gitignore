@@ -95,3 +95,4 @@ evaluation/bakeoff_gates/
 
 # Archived cut-figure outputs (kept locally, out of git)
 _archive/
+references_md/

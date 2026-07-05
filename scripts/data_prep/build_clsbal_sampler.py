@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Standard class-balanced minority oversampler (Kang et al. 2020, arXiv:1910.09217) — the
-defensibility arm for Stage 3 (docs/BAKEOFF_COURSE_CORRECTION_2026-06-19.md; MINORITY_STRATEGY §15).
+defensibility arm for Stage 3.
 
 FREQUENCY-ONLY by design — drops A0's bespoke hardness term AND pooled pixel-richness. A tile's
 weight is the inverse tile-PRESENCE frequency (q=1.0, class-balanced) of the rarest MINORITY class

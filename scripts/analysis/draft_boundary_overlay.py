@@ -39,6 +39,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch, Rectangle
+from matplotlib.legend import Legend
 
 import sys
 
@@ -168,15 +169,16 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
     # gap on the right (colourbar not touching the last image). figsize chosen so cells are
     # square (images fill them; no internal whitespace).
     fig = plt.figure(figsize=(15.2, 2.62 * n))
-    gs = fig.add_gridspec(n, 10, width_ratios=[1, 1, 1, 1, 1, 1, 0.16, 0.06, 0.46, 0.06],
+    gs = fig.add_gridspec(n, 11, width_ratios=[1, 1, 1, 1, 1, 0.08, 0.06, 0.48, 1, 0.08, 0.06],
                           wspace=0.05, hspace=0.05,
-                          left=0.012, right=0.93, top=0.90, bottom=0.17)
+                          left=0.012, right=0.93, top=0.90, bottom=0.21)
     axes = np.empty((n, 6), dtype=object)
+    panel_col = [0, 1, 2, 3, 4, 8]   # (a)-(e) contiguous; (f) sits after the entropy colourbar
     for r in range(n):
         for c in range(6):
-            axes[r, c] = fig.add_subplot(gs[r, c])
-    cax_e = fig.add_subplot(gs[:, 7])   # entropy colourbar
-    cax_f = fig.add_subplot(gs[:, 9])   # MI colourbar (own, smaller scale)
+            axes[r, c] = fig.add_subplot(gs[r, panel_col[c]])
+    cax_e = fig.add_subplot(gs[:, 6])    # entropy colourbar, immediately right of panel (e)
+    cax_f = fig.add_subplot(gs[:, 10])   # MI colourbar, immediately right of panel (f)
 
     im_ent = None
     im_mi = None
@@ -194,8 +196,8 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
         # GT class boundaries on the entropy heatmap, white core over a black casing so they
         # stay legible where they cross bright (near-white) magma.
         bf = p["bnd"].astype(float)
-        axes[r, 4].contour(bf, levels=[0.5], colors="black", linewidths=1.4, alpha=0.85)
-        axes[r, 4].contour(bf, levels=[0.5], colors="white", linewidths=0.6, alpha=0.95)
+        axes[r, 4].contour(bf, levels=[0.5], colors="black", linewidths=0.8, alpha=0.7)
+        axes[r, 4].contour(bf, levels=[0.5], colors="white", linewidths=0.35, alpha=0.9)
 
         # (f) epistemic term (mutual information) on its OWN, much smaller colour scale (its
         # max is several times below the entropy's, shown by the two colourbars). The
@@ -204,8 +206,8 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
         # ambiguity), not epistemic (model capacity). Same GT contours overlaid.
         im_mi = axes[r, 5].imshow(p["mi"], cmap="magma", vmin=0, vmax=vmax_mi,
                                   interpolation="nearest")
-        axes[r, 5].contour(bf, levels=[0.5], colors="black", linewidths=1.4, alpha=0.85)
-        axes[r, 5].contour(bf, levels=[0.5], colors="white", linewidths=0.6, alpha=0.95)
+        axes[r, 5].contour(bf, levels=[0.5], colors="black", linewidths=0.8, alpha=0.7)
+        axes[r, 5].contour(bf, levels=[0.5], colors="white", linewidths=0.35, alpha=0.9)
 
         # Contrast boxes on the GT (b), entropy (e) and MI (f) panels: confident common
         # boundary vs uncertain rare-class contact (spatial counterpart of the class-pair figure).
@@ -237,13 +239,31 @@ def render(tiles, softmax_root, mask_dir, img_dir, cell, seeds, out_dir, use_tex
     cb_f.ax.tick_params(labelsize=15)
 
     # class legend in the reserved bottom band (cannot overlap the images)
-    handles = [Patch(facecolor=PAL[k], edgecolor="0.3",
-                     label=STUDENT_CLASSES[k].replace("Seminatural", "Semi-natural"))
-               for k in range(C)]
-    handles.append(Patch(facecolor=ERR_RGB, edgecolor="0.3", label="Prediction error"))
-    fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False,
-               bbox_to_anchor=(0.5, 0.015), fontsize=19, columnspacing=1.3,
-               handlelength=1.5, handletextpad=0.5)
+    # Background (class 0) is the ignore class and does not appear in these fully-annotated
+    # tiles, so it is omitted from the legend (start at class 1).
+    # The five class colours appear in the ground-truth (b) and prediction (c) panels, so their
+    # legend sits under the left block (a--c, figure-x centre 0.251), split 3 + 2 and each row
+    # centred; the prediction-error colour appears in (d), so its key sits under (d) (centre 0.570).
+    class_handles = [Patch(facecolor=PAL[k], edgecolor="0.3",
+                           label=STUDENT_CLASSES[k].replace("Seminatural", "Semi-natural"))
+                     for k in range(1, C)]
+    err_handle = Patch(facecolor=ERR_RGB, edgecolor="0.3", label="Prediction error")
+
+    def add_legend(handles, ncol, x, y):
+        leg = Legend(fig, handles, [h.get_label() for h in handles], loc="lower center",
+                     ncol=ncol, bbox_to_anchor=(x, y), bbox_transform=fig.transFigure,
+                     frameon=False, fontsize=19, columnspacing=1.3,
+                     handlelength=1.5, handletextpad=0.5)
+        fig.add_artist(leg)
+
+    # Centre on the ACTUAL panel positions (get_position accounts for wspace), so the class legend
+    # sits under a--c and the error key under (d).
+    p_a = axes[0, 0].get_position(); p_c = axes[0, 2].get_position(); p_d = axes[0, 3].get_position()
+    x_ac = 0.5 * (p_a.x0 + p_c.x1)
+    x_d = 0.5 * (p_d.x0 + p_d.x1)
+    add_legend(class_handles[:3], 3, x_ac, 0.065)    # Forest, Grassland, Cropland under a--c
+    add_legend(class_handles[3:], 2, x_ac, 0.000)    # Settlement, Semi-natural, centred beneath
+    add_legend([err_handle], 1, x_d, 0.033)          # Prediction error under (d)
 
     # No baked-in title: this is a paper figure; its caption lives in the LaTeX \caption.
 

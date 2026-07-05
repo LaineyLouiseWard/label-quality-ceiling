@@ -91,8 +91,7 @@ BIO_IDS = [1, 2, 3, 4, 5]
 # OpenEarthMap (auxiliary dataset) — shown in the HARMONISED 6-class Biodiversity
 # taxonomy used during pre-training (Table "Taxonomy harmonisation", main.tex).
 # Native OEM class id -> Biodiversity class id (pre-training, hard labels), GROUNDED
-# from the teacher's empirical OEM->target confusion (geoseg.taxonomy.OEM_TO_STUDENT_PRETRAIN;
-# docs/KD_MAPPING_GROUNDING.md):
+# from the teacher's empirical OEM->target confusion (geoseg.taxonomy.OEM_TO_STUDENT_PRETRAIN):
 #   Tree(5)->Forest(1); Rangeland(2)+Water(6)+Agriculture(7)->Grassland(2);
 #   Developed space(3)+Road(4)+Building(8)->Settlement(4); Bareland(1)->Semi-natural(5).
 # No native class argmaxes to Cropland, so OEM contributes no Cropland exposure;
@@ -214,19 +213,8 @@ def main():
     fig.text(0.012, 0.30, "OpenEarthMap\n(auxiliary)", rotation=90,
              ha="center", va="center", fontsize=15, fontweight="bold")
 
-    # Shared "Biodiversity classes" swatch key — canonical STUDENT_PALETTE colours and the
-    # same display names used by the OEM<->Biodiversity mapping schematic (oem_mapping.tex),
-    # so the distribution figure and the mapping schematic read as a connected pair.
-    key_handles = [
-        Patch(facecolor=np.array(BIO_COLOR[k]) / 255.0, edgecolor="none", label=BIO_NAMES[k])
-        for k in BIO_IDS
-    ]
-    fig.legend(
-        handles=key_handles, title="Biodiversity classes",
-        loc="lower center", ncol=len(BIO_IDS), frameon=False,
-        bbox_to_anchor=(0.55, 1.0), fontsize=12, title_fontsize=13,
-        handlelength=1.1, handleheight=1.0, columnspacing=1.4,
-    )
+    # No separate class legend: every bar is already named on the y-axis, so a colour key
+    # would only repeat those labels.
 
     out = REPO_ROOT / "figures" / "class_distributions.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -1,8 +1,11 @@
 """
 Lever 2 (per-class sampler) — config-side combine of the per-class raw tile weights.
 
+RETIRED: part of the bespoke hardness x minority-richness sampler (Stage 3 A0), superseded by the
+clsbal class-balanced sampler; kept for reference, NOT part of the current 2x2 factorial pipeline.
+
 The pooled Stage-3 sampler routes ~69% of the oversampling budget to Seminatural and leaves
-Settlement at ~1.27x (docs/STAGE4_KD_AND_SAMPLER_DIAGNOSIS.md §3). This splits the pooled
+Settlement at ~1.27x. This splits the pooled
 richness into two independent per-class raw weights w4 (Settlement) and w5 (Seminatural),
 written by scripts/data_prep/build_sampler_weights.py --per_class, then combines them HERE so the
 Settlement boost s4 is a tunable config knob without rebuilding the TSV.

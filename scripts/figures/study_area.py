@@ -216,7 +216,7 @@ def footprints_row(ax, sites, use_tex):
     ax.set_ylim(-1.5, hmax + 0.4)
 
 
-LOC_EXTENT = [-10.9, -5.4, 51.2, 55.6]  # island of Ireland, with margin
+LOC_EXTENT = [-10.9, -5.0, 51.2, 55.6]  # island of Ireland, with even ocean margin on all sides
 
 
 def locator(ax, sites, use_tex):
@@ -275,7 +275,7 @@ def render(root: Path, out_dir: Path, use_tex: bool):
 
     h_loc = y_top - y_bot
     w_loc = _merc_aspect(LOC_EXTENT) * h_loc * (H / W)
-    loc_left = ax_fp.get_position().x1 + 0.05
+    loc_left = ax_fp.get_position().x1 + 0.075
     ax_loc = fig.add_axes([loc_left, y_bot, w_loc, h_loc], projection=ccrs.Mercator())
     locator(ax_loc, sites, use_tex)
 

@@ -49,7 +49,7 @@ HARD = {1: "Forest", 4: "Settlement", 5: "Seminatural"}  # narrative-focus class
 # Boundary-exclusion radii in px. -1 = no exclusion (the true whole-image baseline == compute_metrics).
 RADII_PX = [-1, 0, 1, 2, 3, 4, 6, 8, 12, 16]
 # Boundary-IoU band widths (Cheng et al. 2021), in px. Headline = 3 px = 1.5 m at 0.5 m GSD;
-# swept 0.5-4 m so no single d is load-bearing (PLOT_PLAN D.6 / N2c).
+# swept 0.5-4 m so no single d is load-bearing.
 BIOU_D_PX = [1, 2, 3, 4, 6, 8]
 
 

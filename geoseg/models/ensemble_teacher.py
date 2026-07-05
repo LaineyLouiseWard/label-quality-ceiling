@@ -1,7 +1,9 @@
 """In-domain ENSEMBLE teacher for Stage-4 self/ensemble distillation.
 
-Implements the teacher defined in the Stage-4 protocol
-(`docs/MINORITY_STRATEGY_2026-06-19.md` §11): the teacher is the **uniform softmax
+RETIRED: self/ensemble distillation was DROPPED (kept only as the Discussion's negative result),
+NOT part of the current 2x2 factorial pipeline.
+
+Implements the teacher defined in the Stage-4 protocol: the teacher is the **uniform softmax
 mean of N same-architecture FT-UNetFormer seed students** (in-domain, 6-class — so
 NO mapping matrix, unlike the cross-taxonomy OEM teacher in `kd_utils.KDHelper`).
 

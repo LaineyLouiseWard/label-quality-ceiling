@@ -22,7 +22,7 @@ fi
 #
 # The teacher is built UPSTREAM of the student lineage (teacher -> confusion ->
 # grounded OEM relabel -> student), because the OEM->student mappings are derived
-# from the teacher's measured confusion (see docs/KD_MAPPING_GROUNDING.md).
+# from the teacher's measured confusion.
 #
 # Usage:
 #   bash RUNBOOK.sh                          # run everything from A0

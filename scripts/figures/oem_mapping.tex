@@ -17,8 +17,7 @@
 %   (b) the per-row argmax (asserted == OEM_TO_STUDENT_PRETRAIN), and
 %   (c) the teacher-pixel SHARE from the HARD array row-sums (Agriculture 66.8% etc.;
 %       the SOFT array would give 63.4% for Agriculture and is NOT used for shares).
-% The values embedded below are copied verbatim from that script's output (cross-checked
-% against docs/FIGURE_REVISION_PLAN.md Sec 7).
+% The values embedded below are copied verbatim from that script's output.
 %
 % This is a SCHEMATIC (the value-scaled heatmap is a new schematic idiom), NOT a segmentation
 % mask — do not reuse this rendering anywhere a real mask is drawn.
@@ -172,8 +171,8 @@
 
 % Panel-A title
 \node[hdr, anchor=south] at ($(oem0.north)!0.5!(st0.north)+(0,0.55)$)
-  {Grounded OpenEarthMap $\rightarrow$ Biodiversity pre-training mapping};
-\node[font=\footnotesize\bfseries, anchor=south] at ([yshift=1pt]oem0.north) {OEM (source model)};
+  {Grounded class mapping from OpenEarthMap to Biodiversity};
+\node[font=\footnotesize\bfseries, anchor=south] at ([yshift=1pt]oem0.north) {OpenEarthMap};
 \node[font=\footnotesize\bfseries, anchor=south] at ([yshift=1pt]st0.north) {Biodiversity};
 
 

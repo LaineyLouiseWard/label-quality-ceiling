@@ -11,12 +11,13 @@ Figures use stable DESCRIPTIVE names (the printed numbers are assigned by LaTeX)
   - workflow_pipeline, mitigation_axes, oem_mapping are TikZ (.tex), compiled with
     pdflatex and copied to figures/.
   - study_area, class_distributions, ablation_qualitative, confusion_matrices,
-    factorial_effects, frequency_vs_difficulty, reliability_ece, uncertainty_quality,
+    frequency_vs_difficulty, reliability_ece, uncertainty_quality,
     boundary_limited_error are Python scripts that write directly to figures/.
   - All figures read saved outputs/artifacts (no GPU required).
 
-The uncertainty-overlay and class-pair-boundary figures are produced by scripts/analysis/*
-(they depend on saved per-tile evaluation outputs) and copied in under their final names.
+The uncertainty-overlay, class-pair-boundary, and confident-learning cross-check figures are
+produced by scripts/analysis/* (they depend on saved per-tile evaluation outputs) and copied
+in under their final names.
 Freshly built figures are synced into the submission bundle (manuscript/Figures/), which is
 where the manuscript reads them. Pass --skip <name> to skip by the descriptive key. The
 graphical abstract is built separately (graphical_abstract_panels.py + graphical_abstract_tikz.tex).
@@ -115,13 +116,13 @@ def main() -> None:
         ("class_distributions",    lambda: run_py_no_device(SCRIPTS_DIR / "class_distributions.py")),
         ("ablation_qualitative",   lambda: run_py_no_device(SCRIPTS_DIR / "ablation_qualitative.py")),
         ("confusion_matrices",     lambda: run_py_no_device(SCRIPTS_DIR / "confusion_matrices.py")),
-        ("factorial_effects",      lambda: run_py_no_device(SCRIPTS_DIR / "factorial_effects.py")),
         ("frequency_vs_difficulty",lambda: run_py_no_device(SCRIPTS_DIR / "frequency_vs_difficulty.py")),
         ("reliability_ece",        lambda: run_py_no_device(SCRIPTS_DIR / "reliability_ece.py")),
         ("uncertainty_quality",    lambda: run_py_no_device(SCRIPTS_DIR / "uncertainty_quality.py")),
         ("boundary_limited_error", lambda: run_py_no_device(SCRIPTS_DIR / "boundary_limited_error.py")),
         ("uncertainty_overlay",    lambda: run_analysis("draft_boundary_overlay.py", "draft_boundary_overlay.pdf", "uncertainty_overlay.pdf")),
         ("class_pair_boundary",    lambda: run_analysis("class_pair_boundary.py", "Npair_class_pair_matrix.pdf", "class_pair_boundary.pdf")),
+        ("confident_learning_overlay", lambda: run_analysis("confident_learning_overlay.py", "confident_learning_overlay.pdf", "confident_learning_overlay.pdf")),
     ]
 
     results: dict[str, bool | str] = {}

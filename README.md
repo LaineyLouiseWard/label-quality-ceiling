@@ -6,7 +6,7 @@ Code accompanying the manuscript *Diagnosing a Label-Quality Ceiling in Imbalanc
 Using high-resolution Pléiades satellite imagery and a fixed FT-UNetFormer, two off-the-shelf data-curation levers
 (cross-dataset transfer from OpenEarthMap and a class-balanced sampler) are evaluated in a 2×2 factorial over ten
 seeds. Cross-dataset transfer is the dominant lever and improves every class on validation, while the class-balanced
-sampler is largely redundant once transfer is applied. The residual error is diagnosed as a label-ambiguity ceiling
+sampler is largely redundant once transfer is applied. The residual error is diagnosed as a label-quality ceiling
 concentrated at class boundaries, rather than a limit of model capacity or the imbalance method.
 
 Built with PyTorch 2.9, PyTorch Lightning 2.3, and Rasterio 1.4 on Python 3.11; the environment is pinned in

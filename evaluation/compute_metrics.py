@@ -131,7 +131,7 @@ def tta_predict(model, images, scales, flips, softmax):
     back to the original size before averaging so everything aligns.
 
     flips: string containing any of 'h' (horizontal) / 'v' (vertical). Empty = none.
-    Standard, defensible TTA (cf. docs/MANUSCRIPT_IMPLICATIONS_NOREP.md §15).
+    Standard, defensible TTA.
     """
     N, C, H, W = images.shape
     flip_modes = [()]            # () = no flip

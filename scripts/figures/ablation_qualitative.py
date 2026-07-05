@@ -106,14 +106,15 @@ IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 # Highlight annotations drawn on the GT and every prediction-cell panel of a column,
 # marking the same region down the column so the feature's evolution across cells is
 # trackable (settlement consolidating, semi-natural recovering, roads remaining thin).
-# Referenced by the manuscript caption: cyan = settlement cluster (b), purple =
-# semi-natural region (d), white = thin road features (c).
+# Box colours use the study-area palette (Figure 3): orange = settlement cluster (b),
+# teal = semi-natural region (d), blue = thin road features (c). Blue goes to (c), the only
+# box with no settlement class, so it does not clash with the blue settlement colour.
 # -----------------------------------------------------------------------------
 ANNOTATED_ROWS = {"gt"} | {k for k, _ in CELLS}
 HIGHLIGHT_ANNOTATIONS = [
-    {"col": 1, "rows": ANNOTATED_ROWS, "rect": (100, 40, 300, 260), "color": "#00FFFF", "lw": 6.0},
-    {"col": 3, "rows": ANNOTATED_ROWS, "rect": (140, 40, 320, 340), "color": "#7B2FBE", "lw": 6.0},
-    {"col": 2, "rows": ANNOTATED_ROWS, "rect": (20, 120, 380, 200), "color": "#FFFFFF", "lw": 6.0},
+    {"col": 1, "rows": ANNOTATED_ROWS, "rect": (100, 40, 300, 260), "color": "#E0843A", "lw": 6.0},
+    {"col": 3, "rows": ANNOTATED_ROWS, "rect": (140, 40, 320, 340), "color": "#4F9D8E", "lw": 6.0},
+    {"col": 2, "rows": ANNOTATED_ROWS, "rect": (20, 120, 380, 200), "color": "#3C6E9E", "lw": 6.0},
 ]
 
 

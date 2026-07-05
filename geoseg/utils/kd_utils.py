@@ -16,7 +16,6 @@ from geoseg.taxonomy import OEM_NATIVE_CLASSES, STUDENT_CLASSES
 OEM_CLASSES = list(OEM_NATIVE_CLASSES)
 
 # Student output channel order — must match biodiversity_dataset.CLASSES exactly.
-# Verified at config-parse time by the assertion in config/biodiversity/stage4_kd.py.
 NEW_CLASSES = list(STUDENT_CLASSES)
 
 # Tuple form for equality comparison against biodiversity_dataset.CLASSES.
@@ -28,11 +27,10 @@ def build_mapping_from_confusion(mode="B", conf_path="artifacts/teacher_oem_gt_c
     Reads the soft (prob-weighted) confusion saved by
     scripts/analysis/teacher_oem_to_gt_confusion.py and row-normalises it to
     P(GT student | teacher OEM) -- a soft label-transition matrix (cf. Patrini 2017
-    forward-correction). See docs/KD_MAPPING_GROUNDING.md. This is the campaign KD map.
+    forward-correction). This is the campaign KD map.
 
     Only mode 'B' (full data-driven: every OEM row = the measured distribution) is supported.
-    The legacy name-based map and the partial mode 'A' were removed 2026-06-19; the A-vs-B
-    decision is documented in docs/KD_MAPPING_GROUNDING.md.
+    The legacy name-based map and the partial mode 'A' were removed 2026-06-19.
     """
     if mode != "B":
         raise ValueError(f"only mode 'B' (grounded) is supported, got {mode!r}")

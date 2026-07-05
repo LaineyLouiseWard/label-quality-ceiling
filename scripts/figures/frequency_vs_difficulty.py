@@ -10,7 +10,7 @@ One point per foreground class:
   y = per-class IoU at the pretrained baseline, mean +/- 1 SD over the 10-seed
       campaign (seeds 42-51).
 
-The seed rule (docs/PLOT_PLAN_2026-06-26.md D.2): IoU is a *performance* metric,
+The seed rule: IoU is a *performance* metric,
 so it is computed per seed and then averaged across seeds -- NOT pooled from an
 ensemble. The per-class baseline IoU comes from the canonical 219-tile Irish
 evaluation (eval_on_dumps_219.py: per-seed per-class IoU averaged over the 10
@@ -28,7 +28,7 @@ A faint OLS line (IoU ~ log10 freq) shows how weak the rarity trend is: Forest
 All five foreground classes are shown; the per-class lens is motivated up front
 by ODOS's operational need for usable accuracy on every land-cover type. We do
 NOT add a defensive caption disclaimer about class selection -- that would invite
-the HARKing read it tries to deflect (PLOT_PLAN D.1 / N1).
+the HARKing read it tries to deflect.
 
 Data:
   data/biodiversity_split/train/masks/*.png       (frequency axis)
@@ -165,8 +165,7 @@ def render(root: Path, out_dir: Path, use_tex: bool):
     fig, ax = plt.subplots(figsize=(6.4, 4.4))
 
     xx = np.linspace(logx.min() - 0.08, logx.max() + 0.08, 100)
-    ax.plot(10 ** xx, slope * xx + intercept, ls="--", lw=1.1, color="#888888",
-            zorder=1, label="OLS fit (log freq.)")
+    ax.plot(10 ** xx, slope * xx + intercept, ls="--", lw=1.1, color="#888888", zorder=1)
 
     for c in CLASS_IDS:
         name, _, rgb = CLASS_INFO[c]
@@ -188,15 +187,23 @@ def render(root: Path, out_dir: Path, use_tex: bool):
     ax.set_ylabel("Baseline per-class IoU")
     ax.grid(True, which="both", ls=":", lw=0.5, color="#cccccc", zorder=0)
 
-    ax.text(0.015, -0.155, "rare", transform=ax.transAxes, fontsize=9.5, color="#666666")
-    ax.text(0.93, -0.155, "common", transform=ax.transAxes, fontsize=9.5, color="#666666")
+    ax.text(0.015, -0.155, "rare", transform=ax.transAxes, fontsize=12, color="#333333")
+    ax.text(0.93, -0.155, "common", transform=ax.transAxes, fontsize=12, color="#333333")
 
     r2_str = (rf"$R^2 = {r2:.2f}$" if use_tex else f"R^2 = {r2:.2f}")
     ax.text(0.97, 0.05, r2_str, transform=ax.transAxes, ha="right", va="bottom",
             fontsize=10, color="#555555")
-    ax.legend(loc="upper left", frameon=False)
-
     fig.tight_layout()
+    fig.canvas.draw()  # finalise layout so the fit-line angle is measured in display space
+    _xa, _xb = xx[25], xx[72]
+    _pa = ax.transData.transform((10 ** _xa, slope * _xa + intercept))
+    _pb = ax.transData.transform((10 ** _xb, slope * _xb + intercept))
+    _ang = float(np.degrees(np.arctan2(_pb[1] - _pa[1], _pb[0] - _pa[0])))
+    _xm = xx[70]
+    ax.text(10 ** _xm, slope * _xm + intercept, "OLS fit", rotation=_ang,
+            rotation_mode="anchor", ha="center", va="center", fontsize=10,
+            color="#888888", zorder=2,
+            bbox=dict(boxstyle="round,pad=0.12", fc="white", ec="none"))
     out_dir.mkdir(parents=True, exist_ok=True)
     pdf = out_dir / "frequency_vs_difficulty.pdf"
     png = out_dir / "frequency_vs_difficulty.png"

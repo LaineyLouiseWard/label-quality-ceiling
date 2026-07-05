@@ -212,7 +212,7 @@ def _compose_settlement(dst_img, dst_mask, src_img, src_mask, target_class=SETTL
     paste_onto = destination class ids the Settlement blob may overwrite:
       (0,)      ORIGINAL Background-only rule. Label-safe but a near-no-op on this data: 63% of train
                 tiles have ZERO Background (median 0%), so the blob∩Background is empty and nothing is
-                deposited (see docs/MINORITY_STRATEGY §16.3). NON-standard vs Ghiasi 2021 (random
+                deposited. NON-standard vs Ghiasi 2021 (random
                 placement + occlusion).
       (0,2,3)   TARGETED: Background+Grassland+Cropland = open land where rural Settlement plausibly
                 sits. Deposits on ~every tile, lands at the Grassland boundary where Settlement is

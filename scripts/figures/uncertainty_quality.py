@@ -53,8 +53,8 @@ def find_repo_root() -> Path:
 
 def setup_font(use_tex: bool):
     rc = {"font.family": "serif", "font.serif": ["Computer Modern Roman"],
-          "axes.labelsize": 13, "font.size": 12, "axes.titlesize": 14,
-          "legend.fontsize": 12, "xtick.labelsize": 11, "ytick.labelsize": 11,
+          "axes.labelsize": 14, "font.size": 13, "axes.titlesize": 14,
+          "legend.fontsize": 13, "xtick.labelsize": 12.5, "ytick.labelsize": 12.5,
           "axes.axisbelow": True, "figure.dpi": 150}
     if use_tex:
         rc["text.usetex"] = True
@@ -146,10 +146,7 @@ def render(root, out_dir, seeds, use_tex):
     axB.legend(loc="upper right", frameon=False)
     axB.grid(True, ls=":", lw=0.5, color="#cccccc"); axB.set_axisbelow(True)
     epi_frac = float(mi.sum() / tot.sum())
-    epi_band = float(mi[0] / tot[0])  # boundary-band share; matches caption/body (5.7%)
-    axB.text(0.04, 0.05, (rf"epistemic share $\approx$ {epi_band * 100:.1f}\%" if use_tex
-                          else f"epistemic share ~ {epi_band:.1%}"),
-             transform=axB.transAxes, fontsize=11, color="#555555")
+    # (epistemic-share value is stated in the caption/body; no on-plot annotation needed)
 
     fig.tight_layout()
     out_dir.mkdir(parents=True, exist_ok=True)
