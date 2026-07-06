@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 N4 -- the uncertainty is INFORMATIVE and DATA-INTRINSIC (the principled "labels, not capacity"
-evidence). Two panels, baseline model, 219-tile Irish val set, deep ensemble of 10 seeds.
+evidence). Two panels, full model (stage3_clsbal), 219-tile Irish val set, deep ensemble of 10 seeds.
 
   (a) Sparsification / error-retention curve. Rank foreground pixels by predicted total entropy
       H[mean_p] and progressively discard the most-uncertain; plot the misclassification rate of
@@ -18,7 +18,7 @@ evidence). Two panels, baseline model, 219-tile Irish val set, deep ensemble of 
 
 Data:
   per-seed softmax dumps via list_val_tiles                 (panel a)
-  analysis/label_ceiling/stats_stage1_baseline.json         (panel b, regenerated on 219)
+  analysis/label_ceiling/stats_stage3_clsbal.json           (panel b, regenerated on 219)
 Output: figures/uncertainty_quality.pdf (+ .png). NOT in build_all_figures.py.
 """
 from __future__ import annotations
