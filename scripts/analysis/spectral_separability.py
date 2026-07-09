@@ -11,7 +11,10 @@ Ireland-only: the 219 Irish validation tiles (data/biodiversity_split/val/{image
 Band order is auto-detected: band 3 (0-indexed) is NIR; Red is whichever of bands 0/2 yields the
 higher forest NDVI (vegetation is bright in NIR, dark in Red). Green is band 1.
 
-Cohen's d = (mean_semi - mean_grass) / pooled_sd (pooled over the two classes' pixels).
+Cohen's d = (mean_semi - mean_grass) / pooled_sd. The reported ("co_occurring") d pools only the
+tiles that contain BOTH classes, i.e. within the scenes where the confusion actually arises, which
+is the figure cited in the paper; the "all_tiles" d (every tile containing each class) is kept for
+reference.
 
 Output: analysis/label_ceiling/spectral_separability.json (+ printed summary).
 Run: PYTHONPATH=. python scripts/analysis/spectral_separability.py
@@ -67,8 +70,11 @@ def main() -> None:
     red_band = 0 if np.nanmean(ndvi_test[0]) >= np.nanmean(ndvi_test[2]) else 2
     green_band, nir_band = 1, 3
 
-    semi_ndvi, grass_ndvi, semi_ndwi, grass_ndwi = [], [], [], []
-    n_tiles = 0
+    # per-scope pixel pools: "all" = every tile containing each class;
+    # "co" = only tiles containing BOTH classes (the scenes where the confusion arises).
+    all_sN, all_gN, all_sW, all_gW = [], [], [], []
+    co_sN, co_gN, co_sW, co_gW = [], [], [], []
+    n_tiles, n_co = 0, 0
     for f in imgs:
         mp = mdir / Path(f).name.replace(".tif", ".png")
         if not mp.exists():
@@ -83,22 +89,32 @@ def main() -> None:
         ndvi = np.where((dv != 0) & valid, (nir - red) / dv, np.nan)
         dw = green + nir
         ndwi = np.where((dw != 0) & valid, (green - nir) / dw, np.nan)
-        for cls, nd, nw in [(SEMI, semi_ndvi, semi_ndwi), (GRASS, grass_ndvi, grass_ndwi)]:
-            sel = (m == cls) & valid
-            nd.append(ndvi[sel & np.isfinite(ndvi)])
-            nw.append(ndwi[sel & np.isfinite(ndwi)])
+        sN = ndvi[(m == SEMI) & valid & np.isfinite(ndvi)]
+        gN = ndvi[(m == GRASS) & valid & np.isfinite(ndvi)]
+        sW = ndwi[(m == SEMI) & valid & np.isfinite(ndwi)]
+        gW = ndwi[(m == GRASS) & valid & np.isfinite(ndwi)]
+        all_sN.append(sN); all_gN.append(gN); all_sW.append(sW); all_gW.append(gW)
+        if len(sN) and len(gN):  # co-occurring tile
+            n_co += 1
+            co_sN.append(sN); co_gN.append(gN); co_sW.append(sW); co_gW.append(gW)
         n_tiles += 1
 
-    sN, gN = np.concatenate(semi_ndvi), np.concatenate(grass_ndvi)
-    sW, gW = np.concatenate(semi_ndwi), np.concatenate(grass_ndwi)
+    def scope(sN, gN, sW, gW):
+        sN, gN, sW, gW = (np.concatenate(x) for x in (sN, gN, sW, gW))
+        return {
+            "n_semi_pixels": int(len(sN)), "n_grassland_pixels": int(len(gN)),
+            "NDVI": {"semi_mean": round(float(sN.mean()), 4), "grass_mean": round(float(gN.mean()), 4),
+                     "cohens_d": round(cohens_d(sN, gN), 3)},
+            "NDWI": {"semi_mean": round(float(sW.mean()), 4), "grass_mean": round(float(gW.mean()), 4),
+                     "cohens_d": round(cohens_d(sW, gW), 3)},
+        }
+
     out = {
         "n_tiles": n_tiles,
+        "n_co_occurring_tiles": n_co,
         "band_order": {"red": red_band, "green": green_band, "nir": nir_band},
-        "n_semi_pixels": int(len(sN)), "n_grassland_pixels": int(len(gN)),
-        "NDVI": {"semi_mean": round(float(sN.mean()), 4), "grass_mean": round(float(gN.mean()), 4),
-                 "cohens_d": round(cohens_d(sN, gN), 3)},
-        "NDWI": {"semi_mean": round(float(sW.mean()), 4), "grass_mean": round(float(gW.mean()), 4),
-                 "cohens_d": round(cohens_d(sW, gW), 3)},
+        "co_occurring": scope(co_sN, co_gN, co_sW, co_gW),
+        "all_tiles": scope(all_sN, all_gN, all_sW, all_gW),
     }
     (root / "analysis/label_ceiling/spectral_separability.json").write_text(json.dumps(out, indent=2))
     print(json.dumps(out, indent=2))
