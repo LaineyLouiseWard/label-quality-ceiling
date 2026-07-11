@@ -8,8 +8,8 @@ seed-ensemble argmax prediction and GROUND-TRUTH boundaries only (no repeated la
   A1  Trimap IoU recovery.  Re-score per-class IoU while EXCLUDING a band of width N px around
       GT class boundaries (keep = dist_to_boundary > N). If IoU jumps as the boundary shell is
       removed, the residual error is a boundary/label-ambiguity phenomenon, not an interior
-      (capacity) failure. This is the single-label analogue of Ortiz et al. (2025, TGRS) BS_gamma_beta
-      recovery and the standard trimap / Boundary-IoU diagnostic (Cheng et al. 2021; DeepLab line).
+      (capacity) failure. Standard trimap / boundary-band diagnostic (Kohli et al. 2009, origin;
+      Csurka et al. 2013, the IoU-in-band variant), read in the complementary exclude-the-band direction.
 
   A2  Error rate vs distance-to-boundary.  The prediction-error mirror of the existing
       uncertainty-vs-distance curve (figure_label_ceiling N4). A spike at distance 0 decaying to a

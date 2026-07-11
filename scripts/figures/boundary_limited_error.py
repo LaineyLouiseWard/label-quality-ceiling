@@ -9,8 +9,8 @@ not interior (capacity) failure. Three panels, one cell (baseline):
   (a) Trimap IoU recovery.  Per-class IoU re-scored while excluding a widening band
       around GROUND-TRUTH class boundaries. IoU climbs steeply then plateaus -> the
       error lives in the boundary shell. Per-seed mean over 10 seeds (+/-1 SD band),
-      NOT the ensemble argmax. Single-label analogue of Ortiz et
-      al. (2025) BS_gamma_beta recovery.
+      NOT the ensemble argmax. Trimap / boundary-band recovery (Kohli et al. 2009; Csurka et al. 2013),
+      read in the exclude-the-band direction.
 
   (b) Error vs distance-to-boundary.  Foreground misclassification rate vs distance to
       the nearest GT boundary (log m). Decays to an interior floor -- error is
