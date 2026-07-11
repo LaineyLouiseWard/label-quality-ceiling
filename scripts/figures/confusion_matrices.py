@@ -87,8 +87,9 @@ ANNOT_FONTSIZE = 14
 LABEL_FONTSIZE = 18
 TITLE_FONTSIZE = 18
 V_MIN, V_MAX = 0.0, 1.0
-DELTA_ABS = 0.20            # delta colour scale: symmetric, centred at 0; tightened so the
-                            # actual corrections (|delta| up to ~0.17) are visible, not washed out
+DELTA_ABS = 0.05            # delta colour scale: symmetric, centred at 0; tightened so the
+                            # actual corrections (|delta| up to ~0.04) saturate to clear blue/red
+                            # while the ~0.01 noise cells stay faint
 ANNOT_EPS = 0.005           # blank off-diagonal annotations below this magnitude
 
 def foreground_row_normalize(cm: np.ndarray) -> np.ndarray:
@@ -180,12 +181,12 @@ def main():
     im2 = plot_cm(ax2, cm_b_pct, show_y=False)   # shares rows with (a); no repeated y labels
     ax2.set_title("(b) Full model", fontsize=TITLE_FONTSIZE, fontweight="bold", pad=10)
 
-    # shared Blues colorbar for the two stage panels; ticks on its LEFT so they face (b)'s
-    # (label-free) right edge rather than colliding with panel (c)'s row labels.
+    # shared Blues colorbar for the two stage panels; ticks on its OUTER (right) side so they
+    # sit in the spacer gap and never overlap the (b) panel to its left.
     cax = fig.add_subplot(gs[0, 2])
     cbar = fig.colorbar(im2, cax=cax)
     cbar.ax.tick_params(labelsize=12)
-    cax.yaxis.set_ticks_position("left")
+    cax.yaxis.set_ticks_position("right")
 
     # diverging delta panel: no row labels (rows align with (a)/(b)) so nothing collides
     # with the shared colourbar to its left.
@@ -197,13 +198,15 @@ def main():
     cax2 = fig.add_subplot(gs[0, 4])
     cbar2 = fig.colorbar(im4, cax=cax2)
     cbar2.ax.tick_params(labelsize=12)
-    cax2.yaxis.set_ticks_position("left")   # ticks face panel (c), matching the shared colourbar on (b)
+    cax2.yaxis.set_ticks_position("right")   # ticks on the OUTER edge, clear of panel (c)'s numbers
 
     # --- shrink colorbar heights (same style as the original fig) ---
+    # nudge each colorbar back snug to its plot; the ticks now face OUTWARD (right), so they
+    # sit in the gap toward the next panel instead of overlapping the plot on the left.
     for cx in (cax, cax2):
         pos = cx.get_position()
         cx.set_position([
-            pos.x0 - 0.02,                  # nudge left a bit
+            pos.x0 - 0.02,                  # snug to the plot on the left; outward ticks stay clear
             pos.y0 + pos.height * 0.25,     # move up
             pos.width,
             pos.height * 0.5                # shorten

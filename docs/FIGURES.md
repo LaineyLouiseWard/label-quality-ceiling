@@ -1,6 +1,6 @@
 # Figures
 
-The manuscript uses fourteen figures (thirteen in the main text and one in the appendix). Each is generated from a script in `scripts/figures/`
+The manuscript uses thirteen figures (twelve in the main text and one in the appendix). Each is generated from a script in `scripts/figures/`
 or `scripts/analysis/`. Script and output names are descriptive and stable; the printed figure
 numbers are assigned by LaTeX, so the table maps by content.
 
@@ -10,7 +10,7 @@ numbers are assigned by LaTeX, so the table maps by content.
 python scripts/figures/build_all_figures.py
 ```
 
-This builds all fourteen figures and copies them into the submission bundle
+This builds all thirteen figures and copies them into the submission bundle
 (`manuscript/Figures/`), which is where `main.tex` reads them. TikZ figures are compiled with
 `pdflatex`; the matplotlib figures use `text.usetex` (Latin Modern / Computer Modern), so a LaTeX
 toolchain is required — see the figure prerequisites in [RUNBOOK.md](RUNBOOK.md), section E. The three
@@ -36,7 +36,6 @@ Build a single figure by running its script directly, or skip figures with
 | Uncertainty quality | `scripts/figures/uncertainty_quality.py` | `uncertainty_quality.pdf` |
 | Boundary-limited error | `scripts/figures/boundary_limited_error.py` | `boundary_limited_error.pdf` |
 | Uncertainty overlay | `scripts/analysis/draft_boundary_overlay.py` | `uncertainty_overlay.pdf` |
-| Class-pair boundary matrix | `scripts/analysis/class_pair_boundary.py` | `class_pair_boundary.pdf` |
 | Confident-learning cross-check (appendix) | `scripts/analysis/confident_learning_overlay.py` | `confident_learning_overlay.pdf` |
 
 The appendix confident-learning cross-check also reports a per-class flag-rate table and summary

@@ -121,7 +121,6 @@ def main() -> None:
         ("uncertainty_quality",    lambda: run_py_no_device(SCRIPTS_DIR / "uncertainty_quality.py")),
         ("boundary_limited_error", lambda: run_py_no_device(SCRIPTS_DIR / "boundary_limited_error.py")),
         ("uncertainty_overlay",    lambda: run_analysis("draft_boundary_overlay.py", "draft_boundary_overlay.pdf", "uncertainty_overlay.pdf")),
-        ("class_pair_boundary",    lambda: run_analysis("class_pair_boundary.py", "Npair_class_pair_matrix.pdf", "class_pair_boundary.pdf")),
         ("confident_learning_overlay", lambda: run_analysis("confident_learning_overlay.py", "confident_learning_overlay.pdf", "confident_learning_overlay.pdf")),
     ]
 

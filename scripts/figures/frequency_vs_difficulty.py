@@ -73,9 +73,9 @@ LABEL_OFFSET = {
     2: (-8, 8),    # Grassland (rightmost point -> label sits to its left, inside the axes)
     3: (8, 6),     # Cropland
     4: (9, 9),     # Settlement
-    5: (8, 6),     # Semi-natural
+    5: (-8, 10),   # Semi-natural (top-left of marker, clear of the OLS fit line)
 }
-LABEL_HA = {2: "right"}  # Grassland anchored on the right so text runs leftward
+LABEL_HA = {2: "right", 5: "right"}  # anchored on the right so text runs leftward
 
 
 def find_repo_root() -> Path:

@@ -144,11 +144,6 @@ def render(root, out_dir, seeds, use_tex):
         m = nb > 0
         axB.plot(conf[m], acc[m], "-o", ms=4, lw=1.5, color=c,
                  label=f"{name}, ECE={accum.ece():.3f}", zorder=3)
-    # mean-confidence markers on the x-axis to show boundary pixels are less confident
-    for accum, c in [(b_near, "#b2182b"), (b_far, "#2166ac")]:
-        _, _, nb = accum.curve()
-        mc = (accum.sconf.sum() / max(accum.n.sum(), 1))
-        axB.axvline(mc, color=c, ls=":", lw=1, alpha=0.7)
     axB.set_xlim(0.45, 1.0); axB.set_ylim(0.45, 1.0)
     axB.set_xlabel("predicted confidence"); axB.set_ylabel("empirical accuracy")
     axB.set_title("(b)")
