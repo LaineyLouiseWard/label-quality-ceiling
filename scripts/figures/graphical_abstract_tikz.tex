@@ -94,7 +94,7 @@
   \draw[white, opacity=0.5, line width=0.7pt] (\bx,0) rectangle (\bx+\panelW,\panelW);
   \node[ptitle] at (\bx+\mid,\pcap+0.14) {FT-UNetFormer map};
   \node[badge, anchor=north west] at (\bx+0.15,\panelW-0.15)
-      {\textcolor{glowAmber}{\textbf{$\approx$90\%}} mean IoU};
+      {\textcolor{glowAmber}{\textbf{90.8\%}} mean IoU};
 
   % ======================================================================
   % PANEL 3 - where the error lives (glowing boundary shell)
@@ -129,7 +129,7 @@
   \node[anchor=north, align=center, font=\large, text=darkGrey,
         fill=captionBg, rounded corners=7pt, inner xsep=16pt, inner ysep=11pt,
         text width=12.2cm] at (\totW/2,-1.12)
-    {The remaining errors point to \textcolor{captionAccent}{\textbf{imprecise labelling at class boundaries}}, not model capacity or class imbalance.};
+    {The remaining errors concentrate at \textcolor{captionAccent}{\textbf{ambiguous class boundaries}}, consistent with a label-quality ceiling, not model capacity or class imbalance.};
 
 \end{tikzpicture}
 \end{document}
